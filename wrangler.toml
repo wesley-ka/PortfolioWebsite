@@ -8,10 +8,10 @@ pages_build_output_dir = "./dist"
 # When unset, Pages Functions return 404 and the frontend uses client-side simulation.
 # For local dev, copy .dev.vars.example to .dev.vars and set API_ORIGIN.
 [vars]
-# API_ORIGIN = "https://your-api.example.com"
+API_ORIGIN = "https://civictech-crypto-engine-1012631417854.europe-southwest1.run.app"
 
 [env.preview.vars]
 # API_ORIGIN = "https://your-staging-api.example.com"
 
 [env.production.vars]
-# API_ORIGIN = "https://your-api.example.com"
+API_ORIGIN = "https://civictech-crypto-engine-1012631417854.europe-southwest1.run.app"
