@@ -42,9 +42,9 @@ export async function checkBackendConnection() {
       });
 
       clearTimeout(timeoutId);
-      isBackendOnline = true;
+      isBackendOnline = response.ok;
       lastCheckTime = now;
-      return true;
+      return response.ok;
     } catch (err) {
       isBackendOnline = false;
       lastCheckTime = now;

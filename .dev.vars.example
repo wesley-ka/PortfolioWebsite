@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local `wrangler pages dev` (not committed).
+# Points the /api proxy at your local Spring Boot server.
+API_ORIGIN=http://localhost:8080
