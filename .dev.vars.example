@@ -1,3 +1,12 @@
 # Copy to .dev.vars for local `wrangler pages dev` (not committed).
 # Points the /api proxy at your local Spring Boot server.
 API_ORIGIN=http://localhost:8080
+
+# Telegram Bot integration for the LiveChat widget.
+# 1. Create a bot via https://t.me/BotFather and get the token.
+# 2. Start a chat with your bot, then visit:
+#    https://api.telegram.org/bot<TOKEN>/getUpdates
+#    to find your chat_id.
+# 3. Uncomment and fill in below:
+# TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklmNOPqrStuVWXyz
+# TELEGRAM_CHAT_ID=123456789

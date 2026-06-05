@@ -2,13 +2,14 @@
   import Header from './components/Header.svelte';
   import MinimalCV from './components/MinimalCV.svelte';
   import CryptoDemo from './components/CryptoDemo.svelte';
+  import LiveChat from './components/LiveChat.svelte';
 
   const currentYear = new Date().getFullYear();
 </script>
 
 <!-- Main outer container with dark backdrop -->
 <div class="relative min-h-screen flex flex-col justify-between overflow-x-hidden bg-slate-950 text-slate-100 z-10">
-  
+
   <!-- Glowing Interactive Canvas Background -->
   <div class="absolute inset-0 overflow-hidden pointer-events-none z-0">
     <!-- Top left space-blue glow -->
@@ -19,20 +20,20 @@
 
   <!-- Content Layer -->
   <div class="relative z-10 flex flex-col min-h-screen w-full">
-    
+
     <!-- Top navigation header -->
     <Header />
 
     <!-- Main Content Area -->
     <main class="flex-grow w-full max-w-7xl mx-auto px-4 py-8 md:py-12 md:px-8 lg:px-12 flex flex-col justify-center">
-      
+
       <!-- Grid Layout: Left sidebar (CV) and Right / Center (Demo) -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
+
         <!-- MINIMAL CV (Left side) -->
         <div class="lg:col-span-5 order-2 lg:order-1">
           <MinimalCV />
-          
+
           <!-- Subtle system metadata footer below CV -->
           <div class="mt-6 px-2 text-[10px] font-mono text-slate-600 space-y-1">
             <div class="flex items-center space-x-1.5">
@@ -80,6 +81,9 @@
         </div>
       </div>
     </footer>
-    
+
   </div>
 </div>
+
+<!-- Live Chat Widget -->
+<LiveChat />
