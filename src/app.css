@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', 'Outfit', sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'ui-monospace', 'monospace';
+
+  --shadow-glass-sm: 0 2px 10px 0 rgba(0, 0, 0, 0.2);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --shadow-glass-lg: 0 12px 40px 0 rgba(0, 0, 0, 0.55);
+  --shadow-glow-blue: 0 0 25px 2px rgba(59, 130, 246, 0.15);
+  --shadow-glow-slate: 0 0 25px 2px rgba(148, 163, 184, 0.08);
+
+  --background-image-radial-glow: radial-gradient(circle at center, var(--tw-gradient-stops));
+
+  --animate-pulse-slow: pulse 10s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-spin-slow: spin 24s linear infinite;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.9);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+/* Custom Selection style */
+::selection {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+/* Custom Utility Classes */
+.text-glow-blue {
+  text-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+}
+
+.text-glow-slate {
+  text-shadow: 0 0 10px rgba(226, 232, 240, 0.2);
+}
+
+/* Slow floating animation for blobs */
+@keyframes float-blob-1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(20px, -30px) scale(1.02);
+  }
+  66% {
+    transform: translate(-15px, 15px) scale(0.98);
+  }
+}
+
+@keyframes float-blob-2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1.02);
+  }
+  33% {
+    transform: translate(-30px, 20px) scale(0.98);
+  }
+  66% {
+    transform: translate(15px, -20px) scale(1.01);
+  }
+}
+
+.animate-blob-1 {
+  animation: float-blob-1 20s ease-in-out infinite;
+}
+
+.animate-blob-2 {
+  animation: float-blob-2 25s ease-in-out infinite;
+}
