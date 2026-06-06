@@ -427,12 +427,15 @@
       <button
         on:click={runSigning}
         disabled={!pdfBase64}
-        class="w-full py-2.5 rounded-lg font-semibold text-xs tracking-wider bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-slate-100 transition-all duration-300 shadow-glass border border-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+        class="w-full py-2 rounded-lg font-semibold text-xs tracking-wider bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-slate-100 transition-all duration-300 shadow-glass border border-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed flex flex-col items-center justify-center space-y-0.5"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-        </svg>
-        <span>Sign PDF with AutoFirma (eIDAS PAdES)</span>
+        <div class="flex items-center space-x-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+          <span>Sign PDF with AutoFirma</span>
+        </div>
+        <span class="text-[9px] font-mono text-blue-400/80 font-normal normal-case tracking-normal">eIDAS PAdES Standard</span>
       </button>
     </div>
   {:else if isPending}
@@ -522,9 +525,9 @@
       <!-- Actions -->
       <button
         on:click={downloadSignedPdf}
-        class="w-full py-3 rounded-lg font-bold text-xs tracking-wider bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-slate-100 transition-all duration-300 shadow-glass border border-blue-400/30 flex items-center justify-center space-x-2"
+        class="w-full py-2.5 rounded-lg font-semibold text-xs tracking-wider bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-slate-100 transition-all duration-300 shadow-glass border border-blue-500/20 hover:border-blue-400/40 hover:shadow-glow-blue flex items-center justify-center space-x-2"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
         <span>Download eIDAS Signed PAdES PDF</span>

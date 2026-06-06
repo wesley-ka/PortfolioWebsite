@@ -56,7 +56,7 @@
               Cryptographic Proof-of-Concept
             </h2>
             <p class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed">
-              Interact with functional browser-side simulations demonstrating modern signature verification and zero-knowledge age verification.
+              Interact with a hybrid cryptographic sandbox. Cryptographic signing, zero-knowledge proofs, and secure vault operations run on a live Spring Boot backend with automatic browser-side Web Crypto fallbacks.
             </p>
           </div>
 

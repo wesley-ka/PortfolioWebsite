@@ -133,9 +133,15 @@
       <!-- Submit -->
       <button
         on:click={runTimestamping}
-        class="w-full py-2.5 rounded-lg font-semibold text-xs tracking-wider bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-slate-100 transition-all duration-300 shadow-glass border border-blue-500/20"
+        class="w-full py-2 rounded-lg font-semibold text-xs tracking-wider bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-slate-100 transition-all duration-300 shadow-glass border border-blue-500/20 hover:border-blue-400/40 hover:shadow-glow-blue flex flex-col items-center justify-center space-y-0.5"
       >
-        Request Sealed Timestamp (POST /v1/tsa/timestamp)
+        <div class="flex items-center space-x-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Request Sealed Timestamp</span>
+        </div>
+        <span class="text-[9px] font-mono text-blue-400/80 font-normal normal-case tracking-normal">POST /v1/tsa/timestamp</span>
       </button>
 
     </div>

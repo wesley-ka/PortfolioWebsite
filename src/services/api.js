@@ -7,8 +7,17 @@
  */
 
 import { generateSchnorrProof } from './crypto-math.js';
+import { writable } from 'svelte/store';
 
 const BASE_URL = '/api';
+
+// Exportable Svelte stores for real-time telemetry and inspection
+export const apiLogs = writable([]);
+export const backendStatus = writable({
+  online: false,
+  ping: null,
+  lastChecked: null
+});
 
 // Live connection state
 export let isBackendOnline = false;
@@ -22,7 +31,6 @@ const CONN_CHECK_TTL = 30_000; // Cache result for 30 seconds
  * to avoid spamming the network tab.
  */
 export async function checkBackendConnection() {
-  // Return cached result if still fresh
   const now = Date.now();
   if (now - lastCheckTime < CONN_CHECK_TTL) {
     return isBackendOnline;
@@ -31,6 +39,7 @@ export async function checkBackendConnection() {
   if (connCheckPromise) return connCheckPromise;
 
   connCheckPromise = (async () => {
+    const startTime = Date.now();
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1500);
@@ -42,12 +51,27 @@ export async function checkBackendConnection() {
       });
 
       clearTimeout(timeoutId);
+      const ping = Date.now() - startTime;
       isBackendOnline = response.ok;
       lastCheckTime = now;
+
+      backendStatus.set({
+        online: response.ok,
+        ping,
+        lastChecked: new Date().toISOString()
+      });
+
       return response.ok;
     } catch (err) {
       isBackendOnline = false;
       lastCheckTime = now;
+
+      backendStatus.set({
+        online: false,
+        ping: null,
+        lastChecked: new Date().toISOString()
+      });
+
       return false;
     } finally {
       connCheckPromise = null;
@@ -59,8 +83,14 @@ export async function checkBackendConnection() {
 
 // Helper: Make real API request or execute mock callback
 async function apiCall(path, body, mockFallbackFn) {
-  // Try check connection
-  const online = await checkBackendConnection();
+  const startTime = Date.now();
+  let online = false;
+
+  try {
+    online = await checkBackendConnection();
+  } catch (err) {
+    online = false;
+  }
 
   if (online) {
     try {
@@ -70,8 +100,26 @@ async function apiCall(path, body, mockFallbackFn) {
         body: JSON.stringify(body)
       });
 
+      const latency = Date.now() - startTime;
       const json = await response.json();
+
       if (!response.ok) {
+        // Log API failure
+        apiLogs.update(logs => [
+          {
+            id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+            timestamp: new Date().toISOString(),
+            method: 'POST',
+            path,
+            online: true,
+            status: response.status,
+            latency,
+            payload: body,
+            response: json
+          },
+          ...logs
+        ].slice(0, 50));
+
         // Return structured API error payload
         throw {
           status: response.status,
@@ -81,17 +129,55 @@ async function apiCall(path, body, mockFallbackFn) {
           timestamp: json.timestamp || new Date().toISOString()
         };
       }
+
+      // Log API success
+      apiLogs.update(logs => [
+        {
+          id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+          timestamp: new Date().toISOString(),
+          method: 'POST',
+          path,
+          online: true,
+          status: response.status,
+          latency,
+          payload: body,
+          response: json
+        },
+        ...logs
+      ].slice(0, 50));
+
       return json;
     } catch (err) {
       if (err.status) throw err; // Re-throw structured API errors
       console.warn(`[API] Fetch error calling ${path}, falling back to local simulation:`, err);
       // Server timed out or refused connection during active run, toggle online state
       isBackendOnline = false;
+      backendStatus.update(status => ({ ...status, online: false }));
     }
   }
 
   // Fallback to local offline simulation
-  return await mockFallbackFn();
+  const startFallbackTime = Date.now();
+  const result = await mockFallbackFn();
+  const latency = Date.now() - startFallbackTime;
+
+  // Log simulated fallback
+  apiLogs.update(logs => [
+    {
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString(),
+      method: 'POST',
+      path,
+      online: false,
+      status: 'FALLBACK_OK',
+      latency,
+      payload: body,
+      response: result
+    },
+    ...logs
+  ].slice(0, 50));
+
+  return result;
 }
 
 // In-memory ledger chain for local mock audit trails

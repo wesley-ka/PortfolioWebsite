@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   
   // Import sub-demos
   import SigningDemo from './demos/SigningDemo.svelte';
@@ -10,13 +10,17 @@
   import TsaDemo from './demos/TsaDemo.svelte';
   import AutoFirmaDemo from './demos/AutoFirmaDemo.svelte';
   
-  // Import API state
-  import { checkBackendConnection, isBackendOnline } from '../services/api.js';
+  // Import API state and stores
+  import { checkBackendConnection, isBackendOnline, apiLogs, backendStatus } from '../services/api.js';
 
   // Navigation states: 'signing' | 'zkp' | 'vault' | 'certificate' | 'tsa'
   let activeModule = 'signing';
   let isOnline = false;
   let connInterval;
+
+  // Telemetry inspector state
+  let showTelemetry = false;
+  let selectedLog = null;
 
   // List of modules for loop rendering
   const modules = [
@@ -119,8 +123,12 @@
         {/each}
       </nav>
 
-      <!-- Connection Status indicator at sidebar bottom (hidden on mobile) -->
-      <div class="hidden lg:flex items-center space-x-2 pt-4 border-t border-white/5 mt-auto">
+      <!-- Connection Status indicator at sidebar bottom (clickable) -->
+      <button
+        on:click={() => showTelemetry = true}
+        class="hidden lg:flex items-center space-x-2.5 pt-4 border-t border-white/5 mt-auto text-left group w-full cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-all"
+        aria-label="Inspect cryptographic engine telemetry"
+      >
         <div class="relative flex h-2 w-2">
           {#if isOnline}
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -130,10 +138,15 @@
             <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
           {/if}
         </div>
-        <span class="text-[9px] font-bold font-mono tracking-wider {isOnline ? 'text-blue-400' : 'text-amber-500'}">
-          {isOnline ? 'SPRING BOOT: ONLINE' : 'SIMULATION MODE (OFFLINE)'}
-        </span>
-      </div>
+        <div class="flex-grow min-w-0">
+          <span class="text-[9px] font-extrabold font-mono tracking-wider block truncate {isOnline ? 'text-blue-400' : 'text-amber-500'}">
+            {isOnline ? 'SPRING BOOT: ONLINE' : 'OFFLINE FALLBACK'}
+          </span>
+          <span class="text-[8px] font-mono text-slate-500 group-hover:text-blue-400 transition-colors block mt-0.5">
+            Click to inspect telemetry &rarr;
+          </span>
+        </div>
+      </button>
     </div>
 
     <!-- RIGHT MAIN WINDOW: Selected module display -->
@@ -150,12 +163,14 @@
             </p>
           </div>
           
-          <!-- Mobile connection badge -->
-          <div class="flex lg:hidden shrink-0 mt-0.5">
-            <span class="text-[8px] font-bold font-mono tracking-wider px-2 py-0.5 rounded border {isOnline ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}">
-              {isOnline ? 'API: ONLINE' : 'SIMULATION'}
-            </span>
-          </div>
+          <!-- Mobile connection badge (clickable) -->
+          <button
+            on:click={() => showTelemetry = true}
+            class="flex lg:hidden shrink-0 mt-0.5 cursor-pointer text-[8px] font-bold font-mono tracking-wider px-2.5 py-0.5 rounded border transition-colors {isOnline ? 'bg-blue-500/10 border-blue-500/20 hover:border-blue-400 text-blue-400' : 'bg-amber-500/10 border-amber-500/20 hover:border-amber-400 text-amber-500'}"
+            aria-label="Inspect cryptographic engine telemetry"
+          >
+            {isOnline ? 'API: ONLINE' : 'FALLBACK'} &rarr;
+          </button>
         </div>
 
         <!-- Render active sub-demo with transition -->
@@ -190,4 +205,196 @@
     </div>
 
   </div>
+
+  <!-- Slide-in Telemetry Console Drawer -->
+  {#if showTelemetry}
+    <div
+      transition:fly={{ x: 300, duration: 250 }}
+      class="absolute inset-0 bg-slate-950/98 backdrop-blur-xl z-30 p-6 flex flex-col justify-between border-l border-white/10"
+    >
+      <div class="flex flex-col h-full overflow-hidden">
+        <!-- Drawer Header -->
+        <div class="flex justify-between items-center border-b border-white/10 pb-3.5 mb-4 shrink-0">
+          <div class="flex items-center space-x-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+            <h3 class="text-sm font-extrabold font-mono text-blue-400 tracking-wider">
+              CRYPTOGRAPHIC ENGINE TELEMETRY
+            </h3>
+          </div>
+          <button
+            on:click={() => { showTelemetry = false; selectedLog = null; }}
+            class="text-xs font-semibold font-mono text-slate-400 hover:text-slate-100 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded border border-white/10 transition-colors"
+          >
+            ESC / CLOSE [X]
+          </button>
+        </div>
+
+        <!-- Telemetry Main Body (Scrollable) -->
+        <div class="flex-grow overflow-y-auto space-y-5 pr-1 scrollbar-thin">
+          
+          <!-- Connection and Stats Summary Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="p-3 rounded-lg bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Engine Health Check</span>
+              <div class="flex items-center space-x-2 mt-1">
+                <span class="flex h-2 w-2 relative">
+                  {#if $backendStatus.online}
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  {:else}
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  {/if}
+                </span>
+                <span class="text-xs font-bold font-mono {$backendStatus.online ? 'text-blue-400' : 'text-amber-500'}">
+                  {$backendStatus.online ? 'SPRING_BOOT: ONLINE' : 'OFFLINE_FALLBACK'}
+                </span>
+              </div>
+            </div>
+            
+            <div class="p-3 rounded-lg bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Health Ping Latency</span>
+              <div class="text-xs font-bold font-mono text-slate-300 mt-1">
+                {$backendStatus.ping !== null ? `${$backendStatus.ping} ms` : 'N/A (Simulated)'}
+              </div>
+            </div>
+
+            <div class="p-3 rounded-lg bg-slate-900/60 border border-white/5 space-y-1">
+              <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Engine Endpoint URI</span>
+              <div class="text-xs font-mono text-slate-400 truncate mt-1">
+                {$backendStatus.online ? 'http://localhost:8080/api' : 'Local WebCrypto JS Sandbox'}
+              </div>
+            </div>
+          </div>
+
+          <!-- Documentation Schema Section -->
+          <div class="p-3 rounded-lg bg-slate-900/40 border border-white/5 space-y-2.5">
+            <span class="text-[10px] font-bold font-mono text-slate-400 uppercase tracking-wider block">
+              Cryptographic Schema & Primitives
+            </span>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] font-mono text-slate-500">
+              <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/40 border border-white/5">
+                <span class="text-slate-400">ECDSA Sign & Verify:</span>
+                <span class="text-slate-300">Curve secp256r1 (SHA-256)</span>
+              </div>
+              <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/40 border border-white/5">
+                <span class="text-slate-400">Zero Knowledge (ZKP):</span>
+                <span class="text-slate-300">Schnorr Proof-of-Knowledge</span>
+              </div>
+              <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/40 border border-white/5">
+                <span class="text-slate-400">Document Vault Crypt:</span>
+                <span class="text-slate-300">AES-256-GCM (Auth Tag verified)</span>
+              </div>
+              <div class="flex items-center justify-between p-1.5 rounded bg-slate-950/40 border border-white/5">
+                <span class="text-slate-400">Timestamping (TSA):</span>
+                <span class="text-slate-300">RFC 3161 Standard Tokens</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Split layout: Logs list vs Selected Inspect Pane -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- Log List Pane (Left/Center) -->
+            <div class="lg:col-span-6 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold font-mono text-slate-400 uppercase">
+                  Session Log Feed ({$apiLogs.length})
+                </span>
+                {#if $apiLogs.length > 0}
+                  <button
+                    on:click={() => apiLogs.set([])}
+                    class="text-[9px] font-mono text-slate-500 hover:text-red-400 transition-colors"
+                  >
+                    Clear Logs
+                  </button>
+                {/if}
+              </div>
+
+              {#if $apiLogs.length === 0}
+                <div class="p-8 text-center rounded-lg border border-white/5 bg-slate-950/60 font-mono text-xs text-slate-600">
+                  No requests logged this session.<br/>
+                  <span class="text-[10px]">Execute any demo tab module to record REST API calls.</span>
+                </div>
+              {:else}
+                <div class="space-y-1.5 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin">
+                  {#each $apiLogs as log (log.id)}
+                    <button
+                      on:click={() => selectedLog = log}
+                      class="w-full p-2.5 rounded-lg border text-left font-mono text-[10px] transition-all flex flex-col space-y-1 relative overflow-hidden group {selectedLog?.id === log.id ? 'bg-blue-500/10 border-blue-500/30 text-blue-300 shadow-glass-sm' : 'bg-slate-950/60 border-white/5 hover:bg-white/5 hover:border-white/10 text-slate-300'}"
+                    >
+                      <div class="flex items-center justify-between">
+                        <span class="font-extrabold uppercase text-[9px] px-1.5 py-0.5 rounded {log.online ? 'bg-blue-500/15 text-blue-400' : 'bg-amber-500/15 text-amber-400'}">
+                          {log.online ? 'SPRING_BOOT' : 'FALLBACK'}
+                        </span>
+                        <span class="text-slate-500 text-[8px]">
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <span class="font-semibold text-slate-300 truncate max-w-[150px]">{log.method} {log.path}</span>
+                        <span class="font-extrabold {log.status === 200 || log.status === 'FALLBACK_OK' ? 'text-blue-400' : 'text-red-400'}">
+                          {log.status}
+                        </span>
+                      </div>
+                      <div class="flex items-center justify-between text-[8px] text-slate-500 pt-0.5 border-t border-white/5">
+                        <span>Latency: {log.latency}ms</span>
+                        <span class="group-hover:text-blue-400 transition-colors text-[9px]">Inspect Payload &rarr;</span>
+                      </div>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+
+            <!-- Inspect Payload Pane (Right) -->
+            <div class="lg:col-span-6 space-y-2">
+              <span class="text-[10px] font-bold font-mono text-slate-400 uppercase block">
+                Payload Inspector
+              </span>
+              
+              {#if !selectedLog}
+                <div class="p-8 text-center rounded-lg border border-dashed border-white/10 bg-slate-950/40 font-mono text-[10px] text-slate-600 h-[260px] flex items-center justify-center">
+                  Select a request from the session feed to view request/response bodies and execution parameters.
+                </div>
+              {:else}
+                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin font-mono text-[10px]">
+                  
+                  <!-- Endpoint summary in details -->
+                  <div class="p-2.5 rounded bg-slate-900 border border-white/5 space-y-1">
+                    <div>Endpoint: <span class="text-blue-400 font-bold">{selectedLog.path}</span></div>
+                    <div>Method: <span class="text-slate-300">{selectedLog.method}</span></div>
+                    <div>Latency: <span class="text-slate-300">{selectedLog.latency} ms</span></div>
+                    <div>Status: <span class="text-blue-400 font-bold">{selectedLog.status}</span></div>
+                  </div>
+
+                  <!-- Request payload -->
+                  <div class="relative rounded border border-white/10 overflow-hidden bg-slate-950">
+                    <div class="px-2.5 py-1 bg-slate-900 border-b border-white/5 text-[9px] font-semibold text-slate-400">
+                      Request Body (JSON)
+                    </div>
+                    <pre class="p-2.5 text-[9px] text-slate-300 overflow-x-auto max-h-[110px] leading-relaxed"><code>{JSON.stringify(selectedLog.payload, null, 2)}</code></pre>
+                  </div>
+
+                  <!-- Response payload -->
+                  <div class="relative rounded border border-white/10 overflow-hidden bg-slate-950">
+                    <div class="px-2.5 py-1 bg-slate-900 border-b border-white/5 text-[9px] font-semibold text-slate-400">
+                      Response Data (JSON)
+                    </div>
+                    <pre class="p-2.5 text-[9px] text-slate-300 overflow-x-auto max-h-[110px] leading-relaxed"><code>{JSON.stringify(selectedLog.response, null, 2)}</code></pre>
+                  </div>
+
+                </div>
+              {/if}
+
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
