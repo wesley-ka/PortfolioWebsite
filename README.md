@@ -156,6 +156,24 @@ Demonstrates secure data transmission using lattice-based cryptography integrate
   To prevent an attacker from gaining key entropy by observing decryption errors, ML-KEM never throws an error on tampered ciphertexts. If the ciphertext is valid, the algorithm decapsulates the true shared secret using $\text{dk}_{\text{PKE}}$ (ignoring $z$). If the ciphertext is invalid, the algorithm uses the seed $z$ to compute a pseudorandom dummy shared secret. 
   Because $z$ is only utilized during implicit rejection, modifying the last characters of your private key (which represent $z$) still successfully decrypts valid messages, while altering the early parts of the key (representing $\text{dk}_{\text{PKE}}$) immediately causes decryption failures (resulting in AES-GCM tag verification errors).
 
+### 7. Ephemeral ZKP-Verified Voting Protocol & Academic Prototype
+This module provides a database-free, highly scalable, and privacy-preserving electronic voting protocol based on Schnorr Non-Interactive Zero-Knowledge Proofs (NIZKPs) over the NIST P-256 (`secp256r1`) elliptic curve group. It acts as a practical demonstration of the UOC (Universitat Oberta de Catalunya) Master's Thesis (*Zero-Knowledge Technology in Blockchain*).
+* **Objective**: Enable voters to cast verifiable, anonymously-linked ballots while preventing double-voting and ensuring that no persistent database is required to enforce integrity constraints.
+* **Cryptography & Proof Flow**:
+  1. **Private Identity & Blinding**: The voter derives a private key $x$ from their passphrase and computes their public identity key $Y = x \cdot G$. The voter's unique nullifier is computed as:
+     $$
+     \text{nullifier} = \text{SHA256}(x \mathbin{\|} \text{voteId})
+     $$
+     This binds the voter's identity to this specific election, preventing them from using different passphrases to double-vote.
+  2. **Interactive Challenge**: To prevent replay attacks, the client sends the nullifier and public coordinates $Y = (X_y, Y_y)$ to the server. The server registers the nullifier in-memory and issues a cryptographically secure 256-bit challenge scalar $c$.
+  3. **Local Proof Generation**: Using their private key $x$ and the server challenge $c$, the client computes an ephemeral commitment point $R = k \cdot G$ (using a random nonce $k$) and response scalar:
+     $$
+     s = k + c \cdot x \pmod N
+     $$
+  4. **Ballot Casting & Verification**: The voter submits the ballot selection along with the ZKP package $\{R, c, s, Y, \text{nullifier}\}$. The server verifies the Schnorr relation $s \cdot G \stackrel{?}{=} R + c \cdot Y$ and checks that the `nullifier` hasn't been spent.
+  5. **Anonymity (No-Link at Rest)**: The backend guarantees voter privacy by separating identifying nullifiers and anonymized ballots into separate directories (`nullifiers/` and `ballots/`). Ballots are written to randomized UUID filenames with no linkable timestamps or client headers.
+  6. **Automatic Purging & Result Delivery**: When the election timer expires, the backend scans for the expired session, compiles the final tallies, generates a **Unified JSON Audit Package** containing the full list of Schnorr proofs and nullifiers, delivers the summary report and audit guide directly to the creator's Telegram chat ID via a secure gateway service, and purges all voter-identifying nullifiers and ballot files, leaving zero residual footprint.
+
 ---
 
 ## 🛠️ Technology Stack

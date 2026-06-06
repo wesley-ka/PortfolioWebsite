@@ -6,8 +6,34 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    svelte()
+    svelte(),
+    {
+      name: 'history-fallback',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = new URL(req.url, 'http://localhost');
+          const path = url.pathname;
+          if (
+            path.startsWith('/vote/') ||
+            path.startsWith('/results/') ||
+            path === '/voting' ||
+            path === '/voting/'
+          ) {
+            req.url = '/voting.html';
+          }
+          next();
+        });
+      }
+    }
   ],
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        voting: 'voting.html'
+      }
+    }
+  },
   server: {
     proxy: {
       '/api': {

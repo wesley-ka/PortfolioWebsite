@@ -1,0 +1,4 @@
+/vote/*       /voting.html  200
+/results/*    /voting.html  200
+/voting/*     /voting.html  200
+/voting       /voting.html  200
