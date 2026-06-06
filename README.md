@@ -17,34 +17,48 @@ The project is structured around a **Dual-Mode Execution Model**. By default, it
 
 ### Dual-Mode Execution & API Proxying
 
-```mermaid
-graph TD
-    A[Browser / Client UI] -->|1. Ping GET /v1/health| B(Cloudflare Pages Function Proxy)
-    B -->|2. Forward to Backend| C[Cloud Run: Spring Boot Engine]
-    
-    C -->|3. Status: Online| B
-    B -->|4. Connection State: Active| A
-    
-    A -->|5a. Remote Action POST /v1/vault/...| B
-    B -->|6. Inject Authorization Bearer API_KEY| C
-    C -->|7. Return JSON response| B
-    B -->|8. Render Telemetry Logs| A
-    
-    A -.->|5b. Fallback: Host Unreachable / Timeout| D[Web Crypto API & Custom JS Curve Engine]
-    D -.->|6b. Local BigInt Math & WASM Simulation| A
+```text
+[Browser UI]                  [Cloudflare Proxy]             [Spring Boot Backend]
+     |                                |                               |
+     |---- 1. Ping /v1/health ------->|                               |
+     |                                |---- 2. Forward Request ------>|
+     |                                |<--- 3. Status Response -------|
+     |<--- 4. Connection Active ------|                               |
+     |                                |                               |
+     |==== ONLINE TRANSACTION ========================================|
+     |---- 5a. POST /v1/vault ------>|                               |
+     |                                |--- 6. Inject Authorization -->|
+     |                                |<-- 7. Return JSON Response ---|
+     |<--- 8. Render Telemetry Logs --|                               |
+     |                                                                |
+     |==== OFFLINE FALLBACK (Backend Offline / Unreachable) ==========|
+     |---- 5b. Route to Web Crypto API & Custom JS Curve Engine ---->|
+     |<--- 6b. Compute Local BigInt NIST P-256 Math Simulation ------|
 ```
 
 ### Serverless LiveChat Gateway
 
 To protect sensitive administration credentials, the floating chat widget delegates dispatching to a serverless function endpoint. The client never interacts with or receives third-party keys.
 
-```mermaid
-graph TD
-    A[User Types Message] -->|POST /chat/send| B(Cloudflare Pages Function)
-    B -->|1. Read Env: TELEGRAM_BOT_TOKEN & TELEGRAM_CHAT_ID| B
-    B -->|2. Sanitize HTML & Escape Markdown| B
-    B -->|3. Secure POST Request| C[Telegram Bot API]
-    C -->|4. Deliver Push Notification| D[Site Owner's Device]
+```text
+[User Form Input]
+       |
+       v  (POST /chat/send to Cloudflare Function)
++-----------------------------------------------------+
+|  Cloudflare Pages Serverless Function Proxy         |
+|  - Reads TELEGRAM_BOT_TOKEN & TELEGRAM_CHAT_ID      |
+|  - Sanitizes HTML & Escapes Markdown Content        |
++-----------------------------------------------------+
+       |
+       v  (Secure HTTPS POST)
++-----------------------------------------------------+
+|  Telegram Bot API Gateway                           |
++-----------------------------------------------------+
+       |
+       v  (Push Notification Delivery)
++-----------------------------------------------------+
+|  Site Owner's Registered Telegram Device            |
++-----------------------------------------------------+
 ```
 
 ---
