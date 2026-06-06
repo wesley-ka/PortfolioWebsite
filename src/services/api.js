@@ -8,6 +8,35 @@
 
 import { generateSchnorrProof } from './crypto-math.js';
 import { writable } from 'svelte/store';
+import { ml_kem768 } from '@noble/post-quantum/ml-kem.js';
+
+// Helper functions for Base64URL encoding/decoding of Uint8Arrays
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function base64UrlToBytes(base64url) {
+  let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  const binary = atob(base64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 
 const BASE_URL = '/api';
 
@@ -674,4 +703,121 @@ export async function selectCertificateWithAutoFirma(onSimulateCertSelect) {
     );
   });
 }
+
+// ==========================================
+// MODULE 7: QUANTUM-SAFE MESSAGE EXCHANGE (ML-KEM)
+// ==========================================
+
+export async function generateQuantumKeypair() {
+  return apiCall('/v1/quantum/keygen', {}, async () => {
+    await new Promise(r => setTimeout(r, 600)); // Sim latency
+    const kp = ml_kem768.keygen();
+    return {
+      publicKey: bytesToBase64Url(kp.publicKey),
+      privateKey: bytesToBase64Url(kp.secretKey),
+      algorithm: "ML-KEM-768",
+      publicKeyLength: kp.publicKey.length,
+      privateKeyLength: kp.secretKey.length
+    };
+  });
+}
+
+export async function encryptQuantumMessage(recipientPublicKeyB64, messageText) {
+  const reqBody = {
+    recipient_public_key: recipientPublicKeyB64,
+    message_text: messageText
+  };
+
+  return apiCall('/v1/quantum/encrypt', reqBody, async () => {
+    await new Promise(r => setTimeout(r, 800)); // Sim latency
+    
+    // Decode public key
+    const pkBytes = base64UrlToBytes(recipientPublicKeyB64);
+    
+    // Encapsulate key
+    const { cipherText, sharedSecret } = ml_kem768.encapsulate(pkBytes);
+    
+    // Import shared secret as AES-GCM key
+    const aesKey = await crypto.subtle.importKey(
+      'raw',
+      sharedSecret,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt']
+    );
+    
+    // Encrypt message using AES-GCM
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encTextBytes = new TextEncoder().encode(messageText);
+    
+    const encryptedBuffer = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128
+      },
+      aesKey,
+      encTextBytes
+    );
+    
+    return {
+      kem_ciphertext: bytesToBase64Url(cipherText),
+      iv: bytesToBase64Url(iv),
+      encrypted_message: bytesToBase64Url(new Uint8Array(encryptedBuffer)),
+      algorithm: "ML-KEM-768 + AES-256-GCM",
+      shared_secret_hash: await localSha256(bytesToBase64Url(sharedSecret))
+    };
+  });
+}
+
+export async function decryptQuantumMessage(privateKeyB64, payload) {
+  const reqBody = {
+    private_key: privateKeyB64,
+    kem_ciphertext: payload.kem_ciphertext,
+    iv: payload.iv,
+    encrypted_message: payload.encrypted_message
+  };
+
+  return apiCall('/v1/quantum/decrypt', reqBody, async () => {
+    await new Promise(r => setTimeout(r, 800)); // Sim latency
+    
+    // Decode inputs
+    const skBytes = base64UrlToBytes(privateKeyB64);
+    const kemCtBytes = base64UrlToBytes(payload.kem_ciphertext);
+    const ivBytes = base64UrlToBytes(payload.iv);
+    const encMsgBytes = base64UrlToBytes(payload.encrypted_message);
+    
+    // Decapsulate shared secret
+    const sharedSecret = ml_kem768.decapsulate(kemCtBytes, skBytes);
+    
+    // Import shared secret as AES-GCM key
+    const aesKey = await crypto.subtle.importKey(
+      'raw',
+      sharedSecret,
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt']
+    );
+    
+    // Decrypt message using AES-GCM
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: ivBytes,
+        tagLength: 128
+      },
+      aesKey,
+      encMsgBytes
+    );
+    
+    const decryptedText = new TextDecoder().decode(decryptedBuffer);
+    
+    return {
+      decrypted_text: decryptedText,
+      algorithm: "ML-KEM-768 + AES-256-GCM",
+      shared_secret_hash: await localSha256(bytesToBase64Url(sharedSecret))
+    };
+  });
+}
+
 
