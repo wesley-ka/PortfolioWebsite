@@ -1,5 +1,4 @@
-# API proxy → Cloud Run backend
-/api/*  https://YOUR_CLOUD_RUN_URL/api/:splat  200
+# /api/* is handled by functions/api/[[path]].js (reads BACKEND_URL env var)
 
 # Voting sub-routes (vote/:id, results/:id) → voting SPA
 /vote/*     /voting  200
