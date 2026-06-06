@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { fade, fly } from 'svelte/transition';
   import { signPdfWithAutoFirma } from '../../services/api.js';
 
@@ -47,6 +48,13 @@
       PT: 'Assinado como testemunha.'
     }
   };
+
+  let isMobileDevice = false;
+
+  onMount(() => {
+    isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  });
 
   // State
   let pdfBase64 = '';
@@ -275,7 +283,23 @@
 </script>
 
 <div class="space-y-5">
-  {#if !isPending && !result}
+  {#if isMobileDevice}
+    <!-- Glassmorphic warning card for mobile devices -->
+    <div class="p-5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px] leading-relaxed space-y-3">
+      <div class="flex items-center space-x-2 text-xs font-bold uppercase tracking-wide">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Mobile Signature Not Supported</span>
+      </div>
+      <p>
+        AutoFirma client-side integration requires a desktop application executing on a loopback connection (macOS, Windows, or Linux).
+      </p>
+      <p>
+        Signing documents directly from mobile devices is currently not supported. Please access this website using a desktop computer to test the eIDAS digital signature capabilities.
+      </p>
+    </div>
+  {:else if !isPending && !result}
     <!-- Input Form -->
     <div in:fade={{ duration: 200 }} class="space-y-4">
       

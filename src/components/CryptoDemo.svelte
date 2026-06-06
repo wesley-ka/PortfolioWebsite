@@ -101,9 +101,6 @@
         <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
           Engine Modules
         </h3>
-        <p class="text-[9px] text-slate-600 font-mono">
-          ENDPOINT: :8080/api/v1
-        </p>
       </div>
 
       <!-- Module Selection Buttons (Vertical on desktop, horizontal scroll on mobile) -->
@@ -235,7 +232,7 @@
         <div class="flex-grow overflow-y-auto space-y-5 pr-1 scrollbar-thin">
           
           <!-- Connection and Stats Summary Grid -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div class="p-3 rounded-lg bg-slate-900/60 border border-white/5 space-y-1">
               <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Engine Health Check</span>
               <div class="flex items-center space-x-2 mt-1">
@@ -258,13 +255,6 @@
               <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Health Ping Latency</span>
               <div class="text-xs font-bold font-mono text-slate-300 mt-1">
                 {$backendStatus.ping !== null ? `${$backendStatus.ping} ms` : 'N/A (Simulated)'}
-              </div>
-            </div>
-
-            <div class="p-3 rounded-lg bg-slate-900/60 border border-white/5 space-y-1">
-              <span class="text-[9px] font-bold font-mono text-slate-500 uppercase">Engine Endpoint URI</span>
-              <div class="text-xs font-mono text-slate-400 truncate mt-1">
-                {$backendStatus.online ? 'http://localhost:8080/api' : 'Local WebCrypto JS Sandbox'}
               </div>
             </div>
           </div>
