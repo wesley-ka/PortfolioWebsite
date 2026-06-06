@@ -174,6 +174,20 @@ This module provides a database-free, highly scalable, and privacy-preserving el
   5. **Anonymity (No-Link at Rest)**: The backend guarantees voter privacy by separating identifying nullifiers and anonymized ballots into separate directories (`nullifiers/` and `ballots/`). Ballots are written to randomized UUID filenames with no linkable timestamps or client headers.
   6. **Automatic Purging & Result Delivery**: When the election timer expires, the backend scans for the expired session, compiles the final tallies, generates a **Unified JSON Audit Package** containing the full list of Schnorr proofs and nullifiers, delivers the summary report and audit guide directly to the creator's Telegram chat ID via a secure gateway service, and purges all voter-identifying nullifiers and ballot files, leaving zero residual footprint.
 
+#### 🔑 Creator Access Token
+When a new election is successfully created, the server returns a one-time `creator_token`. This token:
+- Is **displayed once** in the deployment confirmation screen and **never stored** server-side.
+- Must be saved by the election creator — it cannot be recovered if lost.
+- Is the only credential that authorises **early termination (deletion)** of an active election before its scheduled expiry.
+
+To delete an election early using the token:
+```bash
+curl -X DELETE https://awka.dev/api/v1/voting/{vote_id} \
+  -H "Authorization: Bearer {your_creator_token}"
+```
+
+> **Note**: This is an emergency tool. Deleting an election purges all cast ballots and nullifiers immediately and irreversibly, with no result compilation or delivery.
+
 ---
 
 ## 🛠️ Technology Stack

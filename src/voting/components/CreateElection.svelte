@@ -350,9 +350,16 @@
         <div class="bg-amber-950/20 border border-amber-500/20 rounded p-2.5 break-all text-xs text-amber-300">
           {deployedElection.creator_token}
         </div>
-        <p class="text-[10px] text-slate-500 leading-relaxed pt-1">
-          This token is displayed **only once** and is never stored on the server. Write this token down or copy it; you will need it to delete the poll if required.
-        </p>
+        <div class="mt-2 space-y-2 text-[10px] leading-relaxed">
+          <p class="text-amber-400/80 font-semibold">⚠️ Displayed once — never stored server-side. Save it now.</p>
+          <p class="text-slate-400">This token is the <span class="text-slate-200">only credential</span> that can terminate this election early (before its scheduled expiry). If lost, it cannot be recovered.</p>
+          <p class="text-slate-500">To delete this election before it expires, run:</p>
+          <div class="bg-slate-950 border border-white/5 rounded p-2 font-mono text-slate-400 break-all select-all">
+            curl -X DELETE https://awka.dev/api/v1/voting/{deployedElection.vote_id} \<br/>
+            &nbsp;&nbsp;-H "Authorization: Bearer {deployedElection.creator_token}"
+          </div>
+          <p class="text-slate-600">⚠️ Deletion is irreversible — all ballots are purged immediately with no result compilation.</p>
+        </div>
       </div>
 
       <!-- Detail Row 5: Share Link -->
