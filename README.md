@@ -66,20 +66,49 @@ To protect sensitive administration credentials, the floating chat widget delega
 ## 🔑 Cryptographic Module Breakdown
 
 ### 1. Zero-Knowledge Age Verifier (Schnorr Protocol)
-This module demonstrates a decentralized identity proof: proving a user is an adult ($\text{Age} \ge 18$) without disclosing their birth year or private credential key to the verifier.
+This module demonstrates a decentralized identity proof: proving a user is an adult (Age >= 18) without disclosing their birth year or private credential key to the verifier.
 * **Algorithm**: Non-interactive Schnorr Proof-of-Knowledge on curve `secp256r1` (NIST P-256).
 * **Prover Flow**:
-  1. Derive private key $x$ from the secret birth year: $x \equiv \text{SHA256}(\text{BirthYear} \mathbin{\|} \text{salt}) \pmod N$.
-  2. Compute public key point $Y = x \cdot G$.
-  3. Generate ephemeral random nonce $k \in_R \mathbb{Z}_N$ and compute commitment point $R = k \cdot G$.
-  4. Generate commitment challenge scalar $c \equiv \text{SHA256}(R.x \mathbin{\|} R.y) \pmod N$ (deterministic Fiat-Shamir heuristic).
-  5. Compute response scalar $s = k + c \cdot x \pmod N$.
+  1. Derive private key $x$ from the secret birth year:
+     $$
+     x \equiv \text{SHA256}(\text{BirthYear} \mathbin{\|} \text{salt}) \pmod N
+     $$
+  2. Compute public key point:
+     $$
+     Y = x \cdot G
+     $$
+  3. Generate ephemeral random nonce $k \in_R \mathbb{Z}_N$ and compute commitment point:
+     $$
+     R = k \cdot G
+     $$
+  4. Generate commitment challenge scalar $c$ (deterministic Fiat-Shamir heuristic):
+     $$
+     c \equiv \text{SHA256}(R.x \mathbin{\|} R.y) \pmod N
+     $$
+  5. Compute response scalar:
+     $$
+     s = k + c \cdot x \pmod N
+     $$
   6. Submit proof parameters $\{R, c, s, Y\}$ to the verifier.
 * **Verifier Flow**:
   1. Retrieve public parameters on curve `secp256r1`.
-  2. Compute left-hand side point: $P_1 = s \cdot G$.
-  3. Compute right-hand side point: $P_2 = R + c \cdot Y$.
-  4. Confirm curve equivalence: $P_1 \stackrel{?}{=} P_2$. Since $s \cdot G = (k + c \cdot x) \cdot G = k \cdot G + c \cdot (x \cdot G) = R + c \cdot Y$, the equation holds true if and only if the prover holds the private key $x$.
+  2. Compute left-hand side point:
+     $$
+     P_1 = s \cdot G
+     $$
+  3. Compute right-hand side point:
+     $$
+     P_2 = R + c \cdot Y
+     $$
+  4. Confirm curve equivalence:
+     $$
+     P_1 \stackrel{?}{=} P_2
+     $$
+     Since:
+     $$
+     s \cdot G = (k + c \cdot x) \cdot G = k \cdot G + c \cdot (x \cdot G) = R + c \cdot Y
+     $$
+     the equation holds true if and only if the prover holds the private key $x$.
 
 ### 2. eIDAS PDF Signing & AutoFirma Integration
 Implements authentic PAdES electronic signing workflows matching European Union **eIDAS** and Spanish government validation standards.
@@ -92,8 +121,14 @@ Demonstrates authenticated envelope encryption for credentials combined with an 
 * **Authenticated Encryption**: Encrypts JSON payloads using **AES-256-GCM**. Output payloads consist of a Base64 encoded ciphertext, a 12-byte initialization vector (IV), and a 16-byte authentication tag ensuring ciphertext integrity.
 * **Append-Only Linked Ledger**: Every vault action triggers an audit log linked to an immutable blockchain-style ledger.
 * **Block Hashing & Merkle Root Linked List**:
-  * Block hash calculation: $\text{BlockHash} = \text{SHA256}(\text{Index} \mathbin{\|} \text{Timestamp} \mathbin{\|} \text{LogContent} \mathbin{\|} \text{PreviousHash})$.
-  * Merkle Root linkage: $\text{MerkleRoot}_n = \text{SHA256}(\text{BlockHash}_n \mathbin{\|} \text{MerkleRoot}_{n-1})$.
+  * Block hash calculation:
+    $$
+    \text{BlockHash} = \text{SHA256}(\text{Index} \mathbin{\|} \text{Timestamp} \mathbin{\|} \text{LogContent} \mathbin{\|} \text{PreviousHash})
+    $$
+  * Merkle Root linkage:
+    $$
+    \text{MerkleRoot}_n = \text{SHA256}(\text{BlockHash}_n \mathbin{\|} \text{MerkleRoot}_{n-1})
+    $$
 
 ### 4. X.509 Certificate Parser
 Enables deep-inspection of cryptographic public key certificates. Decodes PEM-encoded X.509 certificate containers, parses the underlying DER ASN.1 structure, and extracts:
@@ -114,7 +149,9 @@ Demonstrates secure data transmission using lattice-based cryptography integrate
 * **Hybrid Cryptographic Design**: Key agreement is performed using **ML-KEM-768** (crystals-kyber under the NIST FIPS 203 standard) to encapsulate a 32-byte shared secret. A 256-bit AES key is derived via **HKDF-SHA256**, and message confidentiality and integrity are secured via **AES-256-GCM** (with a random 12-byte IV).
 * **Zero-Knowledge URL-Hash Sharing**: To guarantee that no plaintext, ciphertexts, or keys are ever leaked to the hosting environment, all payloads are base64url-serialized and stored in the URL hash fragment (`#payload=...`). Since browsers never transmit hash fragments to servers during HTTP requests, the metadata and keys remain entirely client-side.
 * **IND-CCA2 Security & Implicit Rejection**: ML-KEM is designed to be secure against active Chosen-Ciphertext Attacks (IND-CCA2). The expanded 2400-byte private key is structured as:
-  $$\text{dk} = (\text{dk}_{\text{PKE}} \mathbin{\|} \text{ek} \mathbin{\|} H(\text{ek}) \mathbin{\|} z)$$
+  $$
+  \text{dk} = (\text{dk}_{\text{PKE}} \mathbin{\|} \text{ek} \mathbin{\|} H(\text{ek}) \mathbin{\|} z)
+  $$
   where $\text{dk}_{\text{PKE}}$ is the raw decapsulation key, $\text{ek}$ is the public key, $H(\text{ek})$ is its SHA3-256 hash, and $z$ is a 32-byte seed at the very end of the private key.
   To prevent an attacker from gaining key entropy by observing decryption errors, ML-KEM never throws an error on tampered ciphertexts. If the ciphertext is valid, the algorithm decapsulates the true shared secret using $\text{dk}_{\text{PKE}}$ (ignoring $z$). If the ciphertext is invalid, the algorithm uses the seed $z$ to compute a pseudorandom dummy shared secret. 
   Because $z$ is only utilized during implicit rejection, modifying the last characters of your private key (which represent $z$) still successfully decrypts valid messages, while altering the early parts of the key (representing $\text{dk}_{\text{PKE}}$) immediately causes decryption failures (resulting in AES-GCM tag verification errors).

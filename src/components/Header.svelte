@@ -62,7 +62,7 @@
 
     <!-- GitHub (icon only on small screens) -->
     <a
-      href="https://github.com/wesaka"
+      href="https://github.com/wesley-ka"
       target="_blank"
       rel="noreferrer"
       class="p-2 rounded bg-white/5 border border-white/10 hover:border-blue-500/30 text-slate-400 hover:text-blue-400 transition-all shadow-glass-sm"

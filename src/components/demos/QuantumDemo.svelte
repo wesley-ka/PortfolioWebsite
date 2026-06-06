@@ -17,6 +17,8 @@
   let generatedLink = '';
   let encryptCopied = false;
   let encryptPending = false;
+  let expandRawPayload = false;
+  let rawPayloadCopied = false;
 
   // Decryption states
   let incomingPayload = null;
@@ -253,6 +255,9 @@
       } else if (flagStore === 'keypair') {
         fullKeyPairCopied = true;
         setTimeout(() => fullKeyPairCopied = false, 2000);
+      } else if (flagStore === 'rawpayload') {
+        rawPayloadCopied = true;
+        setTimeout(() => rawPayloadCopied = false, 2000);
       }
     } catch (err) {
       console.error("Clipboard copy failed:", err);
@@ -426,6 +431,34 @@
                 <span class="text-slate-500 block font-bold">Derived Key Hash:</span>
                 {encryptedPayload.shared_secret_hash.substring(0, 16)}...
               </div>
+            </div>
+          </div>
+
+          <!-- Raw Encrypted JSON Payload (Collapsible) -->
+          <div class="space-y-2 pt-1">
+            <div class="flex justify-between items-center text-[9px] font-semibold font-mono text-slate-500">
+              <span>RAW ENCRYPTED JSON PAYLOAD:</span>
+              <button
+                on:click={() => copyText(JSON.stringify(encryptedPayload, null, 2), 'rawpayload')}
+                class="text-[8px] font-mono text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
+              >
+                {rawPayloadCopied ? 'Copied ✓' : '[Copy JSON]'}
+              </button>
+            </div>
+            
+            <div class="relative rounded border border-white/5 bg-slate-900 overflow-hidden">
+              <textarea
+                readonly
+                value={JSON.stringify(encryptedPayload, null, 2)}
+                rows={expandRawPayload ? 10 : 3}
+                class="w-full p-2.5 rounded bg-slate-900 text-[9px] font-mono text-slate-400 focus:outline-none resize-none select-all transition-all duration-300 scrollbar-thin"
+              ></textarea>
+              <button
+                on:click={() => expandRawPayload = !expandRawPayload}
+                class="absolute bottom-1.5 right-2.5 px-2 py-0.5 rounded bg-slate-950/60 hover:bg-slate-950 border border-white/5 text-[8px] font-mono text-slate-400 hover:text-slate-200 transition-all cursor-pointer shadow-glass-sm"
+              >
+                {expandRawPayload ? 'Collapse' : 'Show Full Payload'}
+              </button>
             </div>
           </div>
         </div>
