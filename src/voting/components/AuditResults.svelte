@@ -175,14 +175,14 @@
 
     // 1. Replace display math ($$...$$)
     let processed = mdString.replace(/\$\$([\s\S]*?)\$\$/g, (match, equation) => {
-      const id = `___MATH_DISPLAY_${placeholderCount++}___`;
+      const id = `MATHDISPLAYX${placeholderCount++}X`;
       mathBlocks.push({ id, content: `$$${equation}$$` });
       return id;
     });
 
     // 2. Replace inline math ($...$)
     processed = processed.replace(/\$([^\$\n]+?)\$/g, (match, equation) => {
-      const id = `___MATH_INLINE_${placeholderCount++}___`;
+      const id = `MATHINLINEX${placeholderCount++}X`;
       mathBlocks.push({ id, content: `$${equation}$` });
       return id;
     });
