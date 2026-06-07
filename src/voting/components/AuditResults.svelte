@@ -164,10 +164,71 @@
 
   let maxVotes = $derived(sortedTallies.length > 0 ? Math.max(...sortedTallies.map(t => t.votes)) : 1);
 
+  let container = $state(null);
+
+  // Custom parser to protect math formulas from marked processing
+  function parseMarkdownWithMath(mdString) {
+    if (!mdString) return '';
+
+    const mathBlocks = [];
+    let placeholderCount = 0;
+
+    // 1. Replace display math ($$...$$)
+    let processed = mdString.replace(/\$\$([\s\S]*?)\$\$/g, (match, equation) => {
+      const id = `___MATH_DISPLAY_${placeholderCount++}___`;
+      mathBlocks.push({ id, content: `$$${equation}$$` });
+      return id;
+    });
+
+    // 2. Replace inline math ($...$)
+    processed = processed.replace(/\$([^\$\n]+?)\$/g, (match, equation) => {
+      const id = `___MATH_INLINE_${placeholderCount++}___`;
+      mathBlocks.push({ id, content: `$${equation}$` });
+      return id;
+    });
+
+    // 3. Compile markdown to HTML
+    let html = marked(processed);
+
+    // 4. Restore math blocks
+    for (const block of mathBlocks) {
+      html = html.replaceAll(block.id, block.content);
+    }
+
+    return html;
+  }
+
   // Markdown compiler wrapper
   let guideHtml = $derived.by(() => {
     if (!results || !results.verification_guide) return '';
-    return marked(results.verification_guide);
+    return parseMarkdownWithMath(results.verification_guide);
+  });
+
+  function renderMath() {
+    if (!container) return;
+    if (typeof window !== 'undefined' && window.renderMathInElement) {
+      try {
+        window.renderMathInElement(container, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          throwOnError: false
+        });
+      } catch (err) {
+        console.error('KaTeX rendering error:', err);
+      }
+    } else {
+      setTimeout(renderMath, 50);
+    }
+  }
+
+  $effect(() => {
+    if (guideHtml && container) {
+      renderMath();
+    }
   });
 
   // Local Auditor verification script sample
@@ -466,7 +527,7 @@ if (verifiedCount === auditPackage.ballots.length) {
         <h3 class="text-xs font-mono text-slate-400 uppercase tracking-widest border-b border-white/5 pb-2">Cryptographic Report</h3>
         
         <!-- Rendered HTML -->
-        <div class="prose prose-invert prose-indigo max-w-none text-xs sm:text-sm text-slate-300 leading-relaxed font-sans space-y-4">
+        <div bind:this={container} class="prose prose-invert prose-indigo max-w-none text-xs sm:text-sm text-slate-300 leading-relaxed font-sans space-y-4">
           {@html guideHtml}
         </div>
       </div>
