@@ -1,5 +1,6 @@
-# /api/* is handled by functions/api/[[path]].js (reads BACKEND_URL env var)
+# /api/* is handled by functions/api/[[path]].js (reads API_ORIGIN env var)
 
 # Voting sub-routes (vote/:id, results/:id) → voting SPA
-/vote/*     /voting  200
-/results/*  /voting  200
+/vote/*     /voting.html  200
+/results/*  /voting.html  200
+
