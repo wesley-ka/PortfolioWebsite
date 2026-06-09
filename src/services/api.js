@@ -111,7 +111,7 @@ export async function checkBackendConnection() {
 }
 
 // Helper: Make real API request or execute mock callback
-async function apiCall(path, body, mockFallbackFn) {
+async function apiCall(path, body, mockFallbackFn, method = 'POST') {
   const startTime = Date.now();
   let online = false;
 
@@ -123,14 +123,36 @@ async function apiCall(path, body, mockFallbackFn) {
 
   if (online) {
     try {
-      const response = await fetch(`${BASE_URL}${path}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const fetchUrl = `${BASE_URL}${path}`;
+      const requestOptions = {
+        method: method,
+        headers: {}
+      };
 
+      if (method !== 'GET' && method !== 'HEAD') {
+        requestOptions.headers['Content-Type'] = 'application/json';
+        requestOptions.body = JSON.stringify(body);
+      }
+
+      const response = await fetch(fetchUrl, requestOptions);
       const latency = Date.now() - startTime;
-      const json = await response.json();
+      
+      let json = null;
+      if (response.status !== 204) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          json = await response.json();
+        } else {
+          const text = await response.text();
+          if (text) {
+            try {
+              json = JSON.parse(text);
+            } catch (e) {
+              json = { message: text };
+            }
+          }
+        }
+      }
 
       if (!response.ok) {
         // Log API failure
@@ -138,13 +160,13 @@ async function apiCall(path, body, mockFallbackFn) {
           {
             id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
             timestamp: new Date().toISOString(),
-            method: 'POST',
+            method,
             path,
             online: true,
             status: response.status,
             latency,
             payload: body,
-            response: json
+            response: json || { error: "API_ERROR", message: "Empty or invalid response body" }
           },
           ...logs
         ].slice(0, 50));
@@ -152,10 +174,10 @@ async function apiCall(path, body, mockFallbackFn) {
         // Return structured API error payload
         throw {
           status: response.status,
-          error: json.error || "API_ERROR",
-          message: json.message || "Unknown server error occurred",
+          error: (json && json.error) || "API_ERROR",
+          message: (json && json.message) || "Unknown server error occurred",
           path: path,
-          timestamp: json.timestamp || new Date().toISOString()
+          timestamp: (json && json.timestamp) || new Date().toISOString()
         };
       }
 
@@ -164,13 +186,13 @@ async function apiCall(path, body, mockFallbackFn) {
         {
           id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
           timestamp: new Date().toISOString(),
-          method: 'POST',
+          method,
           path,
           online: true,
           status: response.status,
           latency,
           payload: body,
-          response: json
+          response: json || { success: true }
         },
         ...logs
       ].slice(0, 50));
@@ -195,7 +217,7 @@ async function apiCall(path, body, mockFallbackFn) {
     {
       id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
       timestamp: new Date().toISOString(),
-      method: 'POST',
+      method,
       path,
       online: false,
       status: 'FALLBACK_OK',
@@ -730,13 +752,13 @@ export async function encryptQuantumMessage(recipientPublicKeyB64, messageText) 
 
   return apiCall('/v1/quantum/encrypt', reqBody, async () => {
     await new Promise(r => setTimeout(r, 800)); // Sim latency
-    
+
     // Decode public key
     const pkBytes = base64UrlToBytes(recipientPublicKeyB64);
-    
+
     // Encapsulate key
     const { cipherText, sharedSecret } = ml_kem768.encapsulate(pkBytes);
-    
+
     // Import shared secret as AES-GCM key
     const aesKey = await crypto.subtle.importKey(
       'raw',
@@ -745,11 +767,11 @@ export async function encryptQuantumMessage(recipientPublicKeyB64, messageText) 
       false,
       ['encrypt']
     );
-    
+
     // Encrypt message using AES-GCM
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encTextBytes = new TextEncoder().encode(messageText);
-    
+
     const encryptedBuffer = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
@@ -759,7 +781,7 @@ export async function encryptQuantumMessage(recipientPublicKeyB64, messageText) 
       aesKey,
       encTextBytes
     );
-    
+
     return {
       kem_ciphertext: bytesToBase64Url(cipherText),
       iv: bytesToBase64Url(iv),
@@ -780,16 +802,16 @@ export async function decryptQuantumMessage(privateKeyB64, payload) {
 
   return apiCall('/v1/quantum/decrypt', reqBody, async () => {
     await new Promise(r => setTimeout(r, 800)); // Sim latency
-    
+
     // Decode inputs
     const skBytes = base64UrlToBytes(privateKeyB64);
     const kemCtBytes = base64UrlToBytes(payload.kem_ciphertext);
     const ivBytes = base64UrlToBytes(payload.iv);
     const encMsgBytes = base64UrlToBytes(payload.encrypted_message);
-    
+
     // Decapsulate shared secret
     const sharedSecret = ml_kem768.decapsulate(kemCtBytes, skBytes);
-    
+
     // Import shared secret as AES-GCM key
     const aesKey = await crypto.subtle.importKey(
       'raw',
@@ -798,7 +820,7 @@ export async function decryptQuantumMessage(privateKeyB64, payload) {
       false,
       ['decrypt']
     );
-    
+
     // Decrypt message using AES-GCM
     const decryptedBuffer = await crypto.subtle.decrypt(
       {
@@ -809,15 +831,561 @@ export async function decryptQuantumMessage(privateKeyB64, payload) {
       aesKey,
       encMsgBytes
     );
-    
+
     const decryptedText = new TextDecoder().decode(decryptedBuffer);
-    
+
     return {
       decrypted_text: decryptedText,
       algorithm: "ML-KEM-768 + AES-256-GCM",
       shared_secret_hash: await localSha256(bytesToBase64Url(sharedSecret))
     };
   });
+}
+
+// ==========================================
+// MODULE 8: VERIFIABLE CREDENTIALS (VC) WALLET
+// ==========================================
+
+const mockVcs = {};
+
+export async function issueVerifiableCredential(payload) {
+  return apiCall('/v1/identity/vc/issue', payload, async () => {
+    await new Promise(r => setTimeout(r, 1200)); // Sim latency
+
+    const vcId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11) + '-' + Math.random().toString(36).substring(2, 11);
+
+    const currentIso = new Date().toISOString();
+    const expirationDate = new Date();
+    expirationDate.setDate(expirationDate.getDate() + (payload.expirationDays || 30));
+
+    // Compute local signature of subject fields
+    const expectedPayload = {
+      subjectId: payload.subjectId || "did:example:citizen123",
+      fullName: payload.fullName || "Juana de Arco",
+      attributes: {
+        eligibleToVote: payload.attributes ? !!payload.attributes.eligibleToVote : true,
+        jurisdiction: payload.attributes ? payload.attributes.jurisdiction : "Madrid"
+      },
+      expirationDays: 30 // standardized for hash match
+    };
+
+    const subjectHash = await localSha256(JSON.stringify(expectedPayload));
+    const mockSignature = btoa(`SHA256withECDSA:${subjectHash}`);
+
+    const credential = {
+      "@context": ["https://www.w3.org/2018/credentials/v1", "https://schema.org"],
+      "id": `urn:uuid:${vcId}`,
+      "type": ["VerifiableCredential", "CivicCitizenCredential"],
+      "issuer": "did:web:engine.civictech.org",
+      "issuanceDate": currentIso,
+      "expirationDate": expirationDate.toISOString(),
+      "credentialSubject": {
+        "id": expectedPayload.subjectId,
+        "fullName": expectedPayload.fullName,
+        "eligibleToVote": expectedPayload.attributes.eligibleToVote,
+        "jurisdiction": expectedPayload.attributes.jurisdiction
+      },
+      "proof": {
+        "type": "JsonWebSignature2020",
+        "created": currentIso,
+        "proofPurpose": "assertionMethod",
+        "verificationMethod": "did:web:engine.civictech.org#key-1",
+        "publicKeyX": "7c98f828a2d3e4f506172839405a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3",
+        "publicKeyY": "8f89e2c2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0",
+        "proofValue": mockSignature
+      }
+    };
+
+    // Save to local in-memory storage and localStorage for simulation access
+    mockVcs[vcId] = credential;
+    try {
+      localStorage.setItem(`mock_vc_${vcId}`, JSON.stringify(credential));
+    } catch (e) {
+      console.warn("localStorage not available:", e);
+    }
+
+    return {
+      vcId: vcId,
+      shareUrl: `/v1/identity/vc/share/${vcId}`,
+      credential: credential
+    };
+  });
+}
+
+export async function fetchCredentialFromUrl(vcUrl) {
+  const startTime = Date.now();
+  let online = false;
+  try {
+    online = await checkBackendConnection();
+  } catch (err) {
+    online = false;
+  }
+
+  // Extract vcId from share URL format
+  let vcId = '';
+  const match = vcUrl.match(/\/share\/([a-zA-Z0-9-]+)/);
+  if (match) {
+    vcId = match[1];
+  }
+
+  if (online) {
+    try {
+      const response = await fetch(vcUrl);
+      const latency = Date.now() - startTime;
+      const json = await response.json();
+
+      apiLogs.update(logs => [
+        {
+          id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+          timestamp: new Date().toISOString(),
+          method: 'GET',
+          path: vcUrl.replace(/^https?:\/\/[^\/]+/, ''),
+          online: true,
+          status: response.status,
+          latency,
+          payload: null,
+          response: json
+        },
+        ...logs
+      ].slice(0, 50));
+
+      return json;
+    } catch (err) {
+      console.warn(`[API] Failed to fetch credential from ${vcUrl}, falling back to local storage:`, err);
+    }
+  }
+
+  // Offline fallback
+  const startFallbackTime = Date.now();
+  await new Promise(r => setTimeout(r, 800));
+
+  let credential = null;
+  if (vcId) {
+    credential = mockVcs[vcId];
+    if (!credential) {
+      try {
+        const stored = localStorage.getItem(`mock_vc_${vcId}`);
+        if (stored) credential = JSON.parse(stored);
+      } catch (e) { }
+    }
+  }
+
+  // If still not found, return a default sample credential
+  if (!credential) {
+    const currentIso = new Date().toISOString();
+    const expDate = new Date();
+    expDate.setDate(expDate.getDate() + 30);
+    const mockPayload = {
+      subjectId: "did:example:citizen123",
+      fullName: "Juana de Arco (Simulated)",
+      attributes: { eligibleToVote: true, jurisdiction: "Madrid" },
+      expirationDays: 30
+    };
+    const subjectHash = await localSha256(JSON.stringify(mockPayload));
+    const mockSignature = btoa(`SHA256withECDSA:${subjectHash}`);
+
+    credential = {
+      "@context": ["https://www.w3.org/2018/credentials/v1", "https://schema.org"],
+      "id": `urn:uuid:simulated-citizen-id-9999`,
+      "type": ["VerifiableCredential", "CivicCitizenCredential"],
+      "issuer": "did:web:engine.civictech.org",
+      "issuanceDate": currentIso,
+      "expirationDate": expDate.toISOString(),
+      "credentialSubject": {
+        "id": "did:example:citizen123",
+        "fullName": "Juana de Arco (Simulated)",
+        "eligibleToVote": true,
+        "jurisdiction": "Madrid"
+      },
+      "proof": {
+        "type": "JsonWebSignature2020",
+        "created": currentIso,
+        "proofPurpose": "assertionMethod",
+        "verificationMethod": "did:web:engine.civictech.org#key-1",
+        "publicKeyX": "7c98f828a2d3e4f506172839405a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3",
+        "publicKeyY": "8f89e2c2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0",
+        "proofValue": mockSignature
+      }
+    };
+  }
+
+  const latency = Date.now() - startFallbackTime;
+  apiLogs.update(logs => [
+    {
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString(),
+      method: 'GET',
+      path: `/v1/identity/vc/share/${vcId || 'simulated'}`,
+      online: false,
+      status: 'FALLBACK_OK',
+      latency,
+      payload: null,
+      response: credential
+    },
+    ...logs
+  ].slice(0, 50));
+
+  return credential;
+}
+
+export async function verifyVerifiableCredential(credential) {
+  const result = await apiCall('/v1/identity/vc/verify', credential, async () => {
+    await new Promise(r => setTimeout(r, 1500)); // Sim radar scan
+
+    if (!credential || !credential.credentialSubject || !credential.proof) {
+      return {
+        verified: false,
+        signatureValid: false,
+        integrityIntact: false,
+        notExpired: false
+      };
+    }
+
+    // Check expiration date
+    const isExpired = new Date(credential.expirationDate) < new Date();
+
+    // Verify local mock cryptographic signature and integrity
+    const subject = credential.credentialSubject;
+    const expectedPayload = {
+      subjectId: subject.id,
+      fullName: subject.fullName,
+      attributes: {
+        eligibleToVote: typeof subject.eligibleToVote === 'string' ? subject.eligibleToVote === 'true' : !!subject.eligibleToVote,
+        jurisdiction: subject.jurisdiction
+      },
+      expirationDays: 30
+    };
+
+    const subjectHash = await localSha256(JSON.stringify(expectedPayload));
+    const expectedSignature = btoa(`SHA256withECDSA:${subjectHash}`);
+
+    const signatureValid = credential.proof.proofValue && credential.proof.proofValue.length > 20;
+    const integrityIntact = credential.proof.proofValue === expectedSignature;
+    const notExpired = !isExpired;
+
+    const verified = signatureValid && integrityIntact && notExpired;
+
+    return {
+      verified,
+      signatureValid,
+      integrityIntact,
+      notExpired
+    };
+  });
+
+  // Normalize properties to support nested checks object and both camelCase/snake_case from server
+  const checks = result.checks || {};
+  return {
+    verified: result.verified ?? false,
+    signatureValid: checks.signatureValid ?? result.signatureValid ?? result.signature_valid ?? false,
+    integrityIntact: checks.integrityIntact ?? result.integrityIntact ?? result.integrity_intact ?? false,
+    notExpired: checks.notExpired ?? result.notExpired ?? result.not_expired ?? false
+  };
+}
+
+
+// ==========================================
+// MODULE 9: CRYPTOGRAPHIC PROVENANCE LEDGER
+// ==========================================
+
+const mockLedgerChains = {};
+
+export async function createLedgerShipment(payload) {
+  return apiCall('/v1/ledger/create', payload, async () => {
+    await new Promise(r => setTimeout(r, 1000));
+
+    const { assetId, assetType, custodian, meta } = payload;
+    const currentIso = new Date().toISOString();
+
+    const previousHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    const contentToHash = `0:${currentIso}:${JSON.stringify({ eventType: "GENESIS", custodian, location: custodian + " (Madrid)" })}:${previousHash}`;
+    const blockHash = await localSha256(contentToHash);
+
+    const genesisBlock = {
+      index: 0,
+      assetId,
+      assetType,
+      eventType: "GENESIS",
+      custodian,
+      location: custodian + " (Madrid)",
+      timestamp: currentIso,
+      previousBlockHash: previousHash,
+      blockHash,
+      signature: btoa(`ECDSA_SIG:${blockHash}`),
+      meta: meta || {}
+    };
+
+    mockLedgerChains[assetId] = [genesisBlock];
+    try {
+      localStorage.setItem(`mock_ledger_${assetId}`, JSON.stringify([genesisBlock]));
+    } catch (e) { }
+
+    return genesisBlock;
+  });
+}
+
+export async function fetchLatestLedgerBlock(assetId) {
+  const path = `/v1/ledger/${assetId}/latest`;
+
+  return apiCall(path, null, async () => {
+    await new Promise(r => setTimeout(r, 600)); // Sim latency
+
+    let chain = mockLedgerChains[assetId];
+    if (!chain) {
+      try {
+        const stored = localStorage.getItem(`mock_ledger_${assetId}`);
+        if (stored) chain = JSON.parse(stored);
+      } catch (e) { }
+    }
+    if (!chain || chain.length === 0) {
+      throw new Error(`Asset '${assetId}' has no registered records.`);
+    }
+
+    return chain[chain.length - 1];
+  }, 'GET');
+}
+
+export async function appendLedgerEvent(payload) {
+  return apiCall('/v1/ledger/append', payload, async () => {
+    await new Promise(r => setTimeout(r, 1000));
+
+    const { assetId, eventType, custodian, location, previousBlockHash, meta } = payload;
+    const currentIso = new Date().toISOString();
+
+    // Retrieve chain
+    let chain = mockLedgerChains[assetId];
+    if (!chain) {
+      try {
+        const stored = localStorage.getItem(`mock_ledger_${assetId}`);
+        if (stored) chain = JSON.parse(stored);
+      } catch (e) { }
+    }
+    if (!chain) chain = [];
+
+    const newIndex = chain.length;
+    const contentToHash = `${newIndex}:${currentIso}:${JSON.stringify({ eventType, custodian, location })}:${previousBlockHash}`;
+    const blockHash = await localSha256(contentToHash);
+
+    const newBlock = {
+      index: newIndex,
+      assetId,
+      eventType,
+      custodian,
+      location,
+      timestamp: currentIso,
+      previousBlockHash,
+      blockHash,
+      signature: btoa(`ECDSA_SIG:${blockHash}`),
+      meta: meta || {}
+    };
+
+    chain.push(newBlock);
+    mockLedgerChains[assetId] = chain;
+    try {
+      localStorage.setItem(`mock_ledger_${assetId}`, JSON.stringify(chain));
+    } catch (e) { }
+
+    return newBlock;
+  });
+}
+
+export async function verifyLedgerChain(assetId) {
+  const path = `/v1/ledger/${assetId}/verify`;
+
+  const startTime = Date.now();
+  let online = false;
+  try {
+    online = await checkBackendConnection();
+  } catch (err) {
+    online = false;
+  }
+
+  if (online) {
+    try {
+      const response = await fetch(`${BASE_URL}${path}`);
+      const latency = Date.now() - startTime;
+      const json = await response.json();
+
+      apiLogs.update(logs => [
+        {
+          id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+          timestamp: new Date().toISOString(),
+          method: 'GET',
+          path,
+          online: true,
+          status: response.status,
+          latency,
+          payload: null,
+          response: json
+        },
+        ...logs
+      ].slice(0, 50));
+
+      return json;
+    } catch (err) {
+      console.warn(`[API] Failed to verify ledger ${assetId} via GET, falling back to local audit:`, err);
+    }
+  }
+
+  // Offline fallback audit
+  const startFallbackTime = Date.now();
+  await new Promise(r => setTimeout(r, 1800)); // Laser scan simulation latency
+
+  let chain = mockLedgerChains[assetId];
+  if (!chain) {
+    try {
+      const stored = localStorage.getItem(`mock_ledger_${assetId}`);
+      if (stored) chain = JSON.parse(stored);
+    } catch (e) { }
+  }
+  if (!chain) chain = [];
+
+  const auditReport = [];
+  let validChain = true;
+
+  for (let i = 0; i < chain.length; i++) {
+    const block = chain[i];
+
+    // Recalculate block hash
+    const contentToHash = `${block.index}:${block.timestamp}:${JSON.stringify({
+      eventType: block.eventType,
+      custodian: block.custodian,
+      location: block.location
+    })}:${block.previousBlockHash}`;
+
+    const recalculatedHash = await localSha256(contentToHash);
+    const hashMatches = recalculatedHash === block.blockHash;
+
+    const signatureValid = hashMatches && block.signature === btoa(`ECDSA_SIG:${block.blockHash}`);
+
+    auditReport.push({
+      index: block.index,
+      hashMatches,
+      signatureValid,
+      blockHash: block.blockHash
+    });
+
+    if (!hashMatches || !signatureValid) {
+      validChain = false;
+    }
+
+    // Check linkage
+    if (i > 0) {
+      const prevBlock = chain[i - 1];
+      if (block.previousBlockHash !== prevBlock.blockHash) {
+        validChain = false;
+      }
+    }
+  }
+
+  const result = {
+    assetId,
+    validChain: chain.length > 0 ? validChain : false,
+    blockCount: chain.length,
+    auditReport
+  };
+
+  const latency = Date.now() - startFallbackTime;
+  apiLogs.update(logs => [
+    {
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString(),
+      method: 'GET',
+      path,
+      online: false,
+      status: 'FALLBACK_OK',
+      latency,
+      payload: null,
+      response: result
+    },
+    ...logs
+  ].slice(0, 50));
+
+  return result;
+}
+
+export function getMockLedgerChain(assetId) {
+  let chain = mockLedgerChains[assetId];
+  if (!chain) {
+    try {
+      const stored = localStorage.getItem(`mock_ledger_${assetId}`);
+      if (stored) chain = JSON.parse(stored);
+    } catch (e) { }
+  }
+  return chain || [];
+}
+
+export async function fetchLedgerChain(assetId) {
+  const path = `/v1/ledger/${assetId}/history`;
+
+  const result = await apiCall(path, null, async () => {
+    await new Promise(r => setTimeout(r, 600)); // Sim latency
+    return {
+      assetId,
+      totalBlocks: getMockLedgerChain(assetId).length,
+      blocks: getMockLedgerChain(assetId)
+    };
+  }, 'GET');
+
+  // Handle both direct array format (mock fallback) and the wrapped object format from server
+  if (result && Array.isArray(result)) {
+    return result;
+  }
+  if (result && result.blocks && Array.isArray(result.blocks)) {
+    return result.blocks;
+  }
+  return [];
+}
+
+export async function resetLedgerChain(assetId) {
+  const path = `/v1/ledger/${assetId}`;
+
+  return apiCall(path, null, async () => {
+    await new Promise(r => setTimeout(r, 600)); // Sim latency
+    delete mockLedgerChains[assetId];
+    try {
+      localStorage.removeItem(`mock_ledger_${assetId}`);
+    } catch (e) {}
+    return { success: true };
+  }, 'DELETE');
+}
+
+export async function tamperLedgerBlock(assetId, index, location) {
+  const path = `/v1/ledger/${assetId}/tamper`;
+  const reqBody = { index, location };
+
+  return apiCall(path, reqBody, async () => {
+    await new Promise(r => setTimeout(r, 800)); // Sim latency
+
+    let chain = mockLedgerChains[assetId];
+    if (!chain) {
+      try {
+        const stored = localStorage.getItem(`mock_ledger_${assetId}`);
+        if (stored) chain = JSON.parse(stored);
+      } catch (e) {}
+    }
+    if (!chain || chain.length === 0) {
+      throw new Error(`Asset '${assetId}' has no registered records to tamper.`);
+    }
+
+    const targetIdx = parseInt(index, 10);
+    if (targetIdx < 0 || targetIdx >= chain.length) {
+      throw new Error(`Invalid block index '${index}' to tamper. Chain length is ${chain.length}.`);
+    }
+
+    // Tamper the specific block by overwriting its location
+    chain[targetIdx] = {
+      ...chain[targetIdx],
+      location: location
+    };
+
+    mockLedgerChains[assetId] = chain;
+    try {
+      localStorage.setItem(`mock_ledger_${assetId}`, JSON.stringify(chain));
+    } catch (e) {}
+
+    return { success: true, index: targetIdx, location };
+  }, 'POST');
 }
 
 

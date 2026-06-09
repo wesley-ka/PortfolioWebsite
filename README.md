@@ -129,6 +129,8 @@ Demonstrates authenticated envelope encryption for credentials combined with an 
     $$
     \text{MerkleRoot}_n = \text{SHA256}(\text{BlockHash}_n \mathbin{\|} \text{MerkleRoot}_{n-1})
     $$
+* **Interactive Database Tampering & Custom Audits**: Integrates a custom Hacker Simulator Panel that lets recruiters target any block index, define a custom location override (presets or text fields), and inspect a Git-style code diff showing the original vs. proposed tampered values. Executing the tamper uses `POST /v1/ledger/{assetId}/tamper` to alter B2 or local storage. Running a chain audit triggers a laser scan that breaks exactly at the corrupted node, displaying particle explosions and highlighting downstream invalidation.
+* **Ledger Purging**: Features a ledger reset workflow using `DELETE /v1/ledger/{assetId}` to delete active blockchain files and reset local or online simulations.
 
 ### 4. X.509 Certificate Parser
 Enables deep-inspection of cryptographic public key certificates. Decodes PEM-encoded X.509 certificate containers, parses the underlying DER ASN.1 structure, and extracts:

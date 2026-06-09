@@ -1,10 +1,16 @@
 <script>
+  import { onMount } from 'svelte';
   import Header from './components/Header.svelte';
   import MinimalCV from './components/MinimalCV.svelte';
   import CryptoDemo from './components/CryptoDemo.svelte';
   import LiveChat from './components/LiveChat.svelte';
 
   const currentYear = new Date().getFullYear();
+  let isVerifyRoute = false;
+
+  onMount(() => {
+    isVerifyRoute = window.location.pathname.includes('/verify-vc');
+  });
 </script>
 
 <!-- Main outer container with dark backdrop -->
@@ -30,35 +36,39 @@
       <!-- Grid Layout: Left sidebar (CV) and Right / Center (Demo) -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-        <!-- MINIMAL CV (Left side) -->
-        <div class="lg:col-span-5 order-2 lg:order-1">
-          <MinimalCV />
+        {#if !isVerifyRoute}
+          <!-- MINIMAL CV (Left side) -->
+          <div class="lg:col-span-5 order-2 lg:order-1">
+            <MinimalCV />
 
-          <!-- Subtle system metadata footer below CV -->
-          <div class="mt-6 px-2 text-[10px] font-mono text-slate-600 space-y-1">
-            <div class="flex items-center space-x-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-blue-500/40"></span>
-              <span>NODE_STATUS: ONLINE_SECURE</span>
+            <!-- Subtle system metadata footer below CV -->
+            <div class="mt-6 px-2 text-[10px] font-mono text-slate-600 space-y-1">
+              <div class="flex items-center space-x-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500/40"></span>
+                <span>NODE_STATUS: ONLINE_SECURE</span>
+              </div>
+              <div>PROVER_SYSTEM: GROTH16_CIRCOM</div>
+              <div>LEDGER_PROTOCOL: DLT_CONSENSUS_V1</div>
             </div>
-            <div>PROVER_SYSTEM: GROTH16_CIRCOM</div>
-            <div>LEDGER_PROTOCOL: DLT_CONSENSUS_V1</div>
           </div>
-        </div>
+        {/if}
 
         <!-- HERO & LIVE CRYPTO DEMO (Right/Center focal point) -->
-        <div class="lg:col-span-7 order-1 lg:order-2 space-y-6">
-          <!-- Intro / Hero Callout -->
-          <div class="space-y-3 px-1">
-            <div class="inline-flex items-center space-x-2 text-xs font-mono tracking-widest text-blue-400 uppercase">
-              <span>[ DEMO_SANDBOX ]</span>
+        <div class="{isVerifyRoute ? 'lg:col-span-12' : 'lg:col-span-7'} order-1 lg:order-2 space-y-6 w-full">
+          {#if !isVerifyRoute}
+            <!-- Intro / Hero Callout -->
+            <div class="space-y-3 px-1">
+              <div class="inline-flex items-center space-x-2 text-xs font-mono tracking-widest text-blue-400 uppercase">
+                <span>[ DEMO_SANDBOX ]</span>
+              </div>
+              <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 via-slate-200 to-slate-400 bg-clip-text text-transparent font-sans">
+                Cryptographic Proof-of-Concept
+              </h2>
+              <p class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed">
+                Interact with a hybrid cryptographic sandbox. Cryptographic signing, zero-knowledge proofs, and secure vault operations run on a live Spring Boot backend with automatic browser-side Web Crypto fallbacks.
+              </p>
             </div>
-            <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 via-slate-200 to-slate-400 bg-clip-text text-transparent font-sans">
-              Cryptographic Proof-of-Concept
-            </h2>
-            <p class="text-sm md:text-base text-slate-400 max-w-xl leading-relaxed">
-              Interact with a hybrid cryptographic sandbox. Cryptographic signing, zero-knowledge proofs, and secure vault operations run on a live Spring Boot backend with automatic browser-side Web Crypto fallbacks.
-            </p>
-          </div>
+          {/if}
 
           <!-- Central Glass Demo Card -->
           <CryptoDemo />
@@ -73,6 +83,9 @@
       <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-[11px] font-mono text-slate-500 gap-3">
         <div>
           &copy; {currentYear} Wesley Kalatai Alberti. All rights reserved.
+        </div>
+        <div class="text-[10px] text-slate-600 text-center select-none">
+          [ Simulated records and credentials are automatically purged after 7 days ]
         </div>
         <div class="flex items-center space-x-4">
           <span>SECURED_BY_AES_256</span>
