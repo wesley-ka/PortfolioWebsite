@@ -7,6 +7,7 @@
     verifyVerifiableCredential,
     isBackendOnline 
   } from '../../services/api.js';
+  import jsQRLib from 'jsqr';
 
   // Navigation tabs: 'issuer' | 'verifier'
   let activeTab = 'issuer';
@@ -16,7 +17,20 @@
   let isScanning = false;
   let errorMsg = null;
   let copied = false;
-  
+
+  // Mobile detection
+  let isMobile = false;
+
+  // Camera / QR scanner state
+  let cameraActive = false;
+  let cameraError = null;
+  let videoEl = null;
+  let canvasEl = null;
+  let scanAnimFrame = null;
+  let scanLinePos = 0;
+  let scanLineDir = 1;
+  let scanLineAnimFrame = null;
+
   // Issuer Form State
   let subjectId = 'did:example:citizen123';
   let fullName = 'Juana de Arco';
@@ -42,6 +56,9 @@
   let connectionNotice = '';
 
   onMount(() => {
+    // Detect mobile device
+    isMobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768;
+
     // Check if URL has vcUrl parameter
     const params = new URLSearchParams(window.location.search);
     const vcUrlParam = params.get('vcUrl');
@@ -53,6 +70,10 @@
         autoFetchAndVerify(vcUrlParam);
       }
     }
+
+    return () => {
+      stopCamera();
+    };
   });
 
   async function runIssuing() {
@@ -289,6 +310,111 @@
     }
   }
 
+  // ---- Camera / QR Scanning (mobile) ----
+
+  async function startCamera() {
+    cameraError = null;
+    cameraActive = true;
+    errorMsg = null;
+    verificationResult = null;
+    connectionNotice = '';
+
+    // Small delay to let Svelte render the video/canvas elements
+    await new Promise(r => setTimeout(r, 80));
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      if (videoEl) {
+        videoEl.srcObject = stream;
+        videoEl.play();
+      }
+      startScanLine();
+      scheduleScan();
+    } catch (err) {
+      cameraError = 'Camera access denied. Please allow camera access and try again.';
+      cameraActive = false;
+    }
+  }
+
+  function stopCamera() {
+    cameraActive = false;
+    if (videoEl && videoEl.srcObject) {
+      videoEl.srcObject.getTracks().forEach(t => t.stop());
+      videoEl.srcObject = null;
+    }
+    if (scanAnimFrame) cancelAnimationFrame(scanAnimFrame);
+    if (scanLineAnimFrame) cancelAnimationFrame(scanLineAnimFrame);
+  }
+
+  function startScanLine() {
+    scanLinePos = 0;
+    scanLineDir = 1;
+    function animateLine() {
+      scanLinePos += scanLineDir * 0.4;
+      if (scanLinePos >= 100) { scanLinePos = 100; scanLineDir = -1; }
+      if (scanLinePos <= 0)   { scanLinePos = 0;   scanLineDir = 1; }
+      scanLineAnimFrame = requestAnimationFrame(animateLine);
+    }
+    scanLineAnimFrame = requestAnimationFrame(animateLine);
+  }
+
+  async function scheduleScan() {
+    if (!cameraActive) return;
+    scanAnimFrame = requestAnimationFrame(async () => {
+      await attemptQrScan();
+      scheduleScan();
+    });
+  }
+
+  async function attemptQrScan() {
+    if (!videoEl || !canvasEl || videoEl.readyState < 2) return;
+
+    const vw = videoEl.videoWidth;
+    const vh = videoEl.videoHeight;
+    if (!vw || !vh) return;
+
+    canvasEl.width = vw;
+    canvasEl.height = vh;
+    const ctx = canvasEl.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, vw, vh);
+
+    let qrData = null;
+
+    // Try native BarcodeDetector first
+    if ('BarcodeDetector' in window) {
+      try {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const codes = await detector.detect(canvasEl);
+        if (codes.length > 0) qrData = codes[0].rawValue;
+      } catch (_) {}
+    }
+
+    // Fallback: jsQR (statically imported)
+    if (!qrData && jsQRLib) {
+      try {
+        const imageData = ctx.getImageData(0, 0, vw, vh);
+        const result = jsQRLib(imageData.data, vw, vh);
+        if (result) qrData = result.data;
+      } catch (_) {}
+    }
+
+    if (qrData) {
+      stopCamera();
+      // QR contains a URL — auto fetch and verify
+      let targetUrl = qrData;
+      // If it's a full URL with vcUrl param, extract it
+      try {
+        const u = new URL(qrData);
+        const vcP = u.searchParams.get('vcUrl');
+        if (vcP) targetUrl = vcP;
+      } catch (_) {}
+      inputVcUrl = targetUrl;
+      await autoFetchAndVerify(targetUrl);
+    }
+  }
+
   let dragCounter = 0;
 
   function cleanJsonString(str) {
@@ -389,15 +515,15 @@
   <div class="flex border-b border-white/5 pb-0.5">
     <button
       class="px-4 py-2 text-xs font-semibold border-b-2 transition-all duration-300 {activeTab === 'issuer' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'}"
-      on:click={() => { activeTab = 'issuer'; errorMsg = null; }}
+      on:click={() => { activeTab = 'issuer'; errorMsg = null; stopCamera(); }}
     >
-      Issuer Portal (Desktop)
+      Issuer Portal
     </button>
     <button
       class="px-4 py-2 text-xs font-semibold border-b-2 transition-all duration-300 {activeTab === 'verifier' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'}"
       on:click={() => { activeTab = 'verifier'; errorMsg = null; }}
     >
-      Verifier Portal (Mobile Scan)
+      Verifier Portal
     </button>
   </div>
 
@@ -694,63 +820,150 @@
 
       {#if !isScanning && !verificationResult}
         <div class="space-y-4">
-          
-          <!-- Default View: Scan instructions or Drag/Drop upload zone -->
-          <div 
-            class="p-6 rounded-xl text-center space-y-4 max-w-lg mx-auto border transition-all duration-300 {isDragging ? 'bg-blue-500/10 border-blue-500/40 shadow-glow-blue/10 scale-[1.01]' : 'bg-slate-900/30 border-white/5'}"
-            role="region"
-            aria-label="Credential Drop Zone"
-          >
-            <!-- Dropzone clickable icon -->
-            <label class="block cursor-pointer group">
-              <input type="file" accept=".json" class="hidden" on:change={handleVerifierFileSelect} />
-              
-              <div class="w-12 h-12 rounded-full bg-blue-500/5 border border-blue-500/20 group-hover:border-blue-400 group-hover:bg-blue-500/10 flex items-center justify-center mx-auto text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              
-              <div class="space-y-1 mt-3">
-                <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider group-hover:text-blue-300 transition-colors">
-                  Drag & Drop or Click to Upload JSON
-                </h3>
-                <p class="text-[10px] text-slate-400 max-w-sm mx-auto leading-relaxed">
-                  Drag and drop your signed `.json` W3C credential file here, or click to browse. You can also scan the issuer card's QR code using your mobile device.
-                </p>
-              </div>
-            </label>
+          <!-- Default View: Mobile Camera Scanner OR Desktop Drag/Drop -->
+          {#if isMobile}
+            <!-- Mobile: Camera QR Scanner -->
+            {#if !cameraActive}
+              <div class="flex flex-col items-center justify-center py-10 space-y-5">
+                <div class="relative">
+                  <!-- Outer glow ring -->
+                  <div class="absolute inset-0 rounded-full bg-blue-500/10 blur-xl"></div>
+                  <div class="relative w-24 h-24 rounded-full bg-slate-900/80 border border-blue-500/30 flex items-center justify-center shadow-glass-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                </div>
 
-            <div class="space-y-2 border-t border-white/5 pt-4">
-              <div class="text-[9px] font-mono text-slate-500">// SIMULATE ON LOCAL MACHINE</div>
-              <div class="flex flex-wrap gap-2 justify-center">
+                <div class="text-center space-y-1.5 px-4">
+                  <h3 class="text-sm font-bold text-slate-100 tracking-wide">Scan Credential QR</h3>
+                  <p class="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
+                    Point your camera at the QR code on the issued credential card to automatically verify the cryptographic signature.
+                  </p>
+                </div>
+
+                {#if cameraError}
+                  <div class="text-[10px] text-red-400 font-mono text-center px-4">{cameraError}</div>
+                {/if}
+
                 <button
-                  on:click={() => loadSampleVc(true)}
-                  class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-blue-500/30 text-[10px] font-mono text-slate-300 hover:text-blue-300 transition-all cursor-pointer"
+                  on:click={startCamera}
+                  class="flex items-center space-x-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white text-sm font-semibold shadow-glass transition-all duration-300 border border-blue-500/30 cursor-pointer"
                 >
-                  Load Valid VC
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Scan Credential</span>
                 </button>
-                <button
-                  on:click={() => loadSampleVc(false)}
-                  class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-red-500/30 text-[10px] font-mono text-slate-300 hover:text-red-400 transition-all cursor-pointer"
-                >
-                  Load Tampered VC
-                </button>
-                <button
-                  on:click={handlePasteJsonRaw}
-                  class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-slate-300/30 text-[10px] font-mono text-slate-300 hover:text-slate-100 transition-all cursor-pointer"
-                >
-                  Paste JSON Raw
-                </button>
-                <button
-                  on:click={() => { showManualInput = true; verifyInputMethod = 'url'; }}
-                  class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-slate-300/30 text-[10px] font-mono text-slate-300 hover:text-slate-100 transition-all cursor-pointer"
-                >
-                  Input Share URL
-                </button>
+
+                <!-- Divider + desktop fallbacks for mobile too -->
+                <div class="w-full border-t border-white/5 pt-4 space-y-2">
+                  <div class="text-[9px] font-mono text-slate-500 text-center">// OR LOAD SAMPLE</div>
+                  <div class="flex flex-wrap gap-2 justify-center">
+                    <button on:click={() => loadSampleVc(true)} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-blue-500/30 text-[10px] font-mono text-slate-300 hover:text-blue-300 transition-all cursor-pointer">Load Valid VC</button>
+                    <button on:click={() => loadSampleVc(false)} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-red-500/30 text-[10px] font-mono text-slate-300 hover:text-red-400 transition-all cursor-pointer">Load Tampered VC</button>
+                  </div>
+                </div>
+              </div>
+
+            {:else}
+              <!-- Active camera scanner UI -->
+              <div class="relative w-full rounded-xl overflow-hidden bg-black" style="aspect-ratio: 4/3; max-height: 55vh;">
+                <!-- Live video stream -->
+                <!-- svelte-ignore a11y-media-has-caption -->
+                <video
+                  bind:this={videoEl}
+                  class="absolute inset-0 w-full h-full object-cover"
+                  playsinline
+                  autoplay
+                  muted
+                ></video>
+
+                <!-- Hidden canvas for frame analysis -->
+                <canvas bind:this={canvasEl} class="hidden"></canvas>
+
+                <!-- Dark vignette overlay with clear center -->
+                <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(ellipse 55% 55% at 50% 50%, transparent 40%, rgba(0,0,0,0.7) 100%);"></div>
+
+                <!-- Corner bracket guides -->
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div class="relative w-52 h-52">
+                    <!-- Top-left -->
+                    <div class="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-blue-400 rounded-tl-sm"></div>
+                    <!-- Top-right -->
+                    <div class="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-blue-400 rounded-tr-sm"></div>
+                    <!-- Bottom-left -->
+                    <div class="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-blue-400 rounded-bl-sm"></div>
+                    <!-- Bottom-right -->
+                    <div class="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-blue-400 rounded-br-sm"></div>
+                    <!-- Scan line -->
+                    <div
+                      class="absolute left-1 right-1 h-[2px] bg-blue-400 shadow-[0_0_8px_2px_rgba(96,165,250,0.8)] pointer-events-none"
+                      style="top: {scanLinePos}%;"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Cancel button overlay -->
+                <div class="absolute bottom-4 left-0 right-0 flex justify-center">
+                  <button
+                    on:click={stopCamera}
+                    class="px-4 py-2 rounded-full bg-slate-900/80 backdrop-blur-sm border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancel Scan
+                  </button>
+                </div>
+
+                <!-- Status label -->
+                <div class="absolute top-3 left-0 right-0 flex justify-center">
+                  <div class="px-3 py-1 rounded-full bg-slate-900/70 backdrop-blur-sm border border-blue-500/20 text-[10px] font-mono text-blue-400 flex items-center space-x-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                    <span>SCANNING FOR QR CODE...</span>
+                  </div>
+                </div>
+              </div>
+            {/if}
+
+          {:else}
+            <!-- Desktop: Drag & Drop zone -->
+            <div 
+              class="p-6 rounded-xl text-center space-y-4 max-w-lg mx-auto border transition-all duration-300 {isDragging ? 'bg-blue-500/10 border-blue-500/40 shadow-glow-blue/10 scale-[1.01]' : 'bg-slate-900/30 border-white/5'}"
+              role="region"
+              aria-label="Credential Drop Zone"
+            >
+              <!-- Dropzone clickable icon -->
+              <label class="block cursor-pointer group">
+                <input type="file" accept=".json" class="hidden" on:change={handleVerifierFileSelect} />
+                
+                <div class="w-12 h-12 rounded-full bg-blue-500/5 border border-blue-500/20 group-hover:border-blue-400 group-hover:bg-blue-500/10 flex items-center justify-center mx-auto text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-all">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </div>
+                
+                <div class="space-y-1 mt-3">
+                  <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider group-hover:text-blue-300 transition-colors">
+                    Drag &amp; Drop or Click to Upload JSON
+                  </h3>
+                  <p class="text-[10px] text-slate-400 max-w-sm mx-auto leading-relaxed">
+                    Drag and drop your signed `.json` W3C credential file here, or click to browse. You can also scan the issuer card's QR code using your mobile device.
+                  </p>
+                </div>
+              </label>
+
+              <div class="space-y-2 border-t border-white/5 pt-4">
+                <div class="text-[9px] font-mono text-slate-500">// SIMULATE ON LOCAL MACHINE</div>
+                <div class="flex flex-wrap gap-2 justify-center">
+                  <button on:click={() => loadSampleVc(true)} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-blue-500/30 text-[10px] font-mono text-slate-300 hover:text-blue-300 transition-all cursor-pointer">Load Valid VC</button>
+                  <button on:click={() => loadSampleVc(false)} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-red-500/30 text-[10px] font-mono text-slate-300 hover:text-red-400 transition-all cursor-pointer">Load Tampered VC</button>
+                  <button on:click={handlePasteJsonRaw} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-slate-300/30 text-[10px] font-mono text-slate-300 hover:text-slate-100 transition-all cursor-pointer">Paste JSON Raw</button>
+                  <button on:click={() => { showManualInput = true; verifyInputMethod = 'url'; }} class="px-2.5 py-1.5 rounded bg-slate-950 border border-white/10 hover:border-slate-300/30 text-[10px] font-mono text-slate-300 hover:text-slate-100 transition-all cursor-pointer">Input Share URL</button>
+                </div>
               </div>
             </div>
-          </div>
+          {/if}
 
           <!-- Manual Input Modal panel (URL fetch or raw JSON pasting) -->
           {#if showManualInput || inputVcUrl}

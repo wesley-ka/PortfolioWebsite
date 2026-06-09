@@ -4,7 +4,7 @@
 </script>
 
 <header
-  class="w-full flex items-center justify-between px-6 py-5 md:px-12 backdrop-blur-md bg-slate-950/40 border-b border-white/5 sticky top-0 z-50"
+  class="w-full flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5 md:px-12 backdrop-blur-md bg-slate-950/40 border-b border-white/5 sticky top-0 z-50 gap-3"
 >
   <!-- Branding / Logo -->
   <div class="flex items-center space-x-3">
@@ -24,14 +24,14 @@
       </span>
     </div>
 
-    <div>
+    <div class="min-w-0">
       <h1
-        class="text-xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent font-sans"
+        class="text-base sm:text-xl font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-300 bg-clip-text text-transparent font-sans truncate"
       >
         Wesley Kalatai Alberti
       </h1>
       <p
-        class="text-[10px] font-mono tracking-widest text-slate-500 uppercase leading-none mt-0.5"
+        class="hidden sm:block text-[10px] font-mono tracking-widest text-slate-500 uppercase leading-none mt-0.5"
       >
         // FULLSTACK_CYBERSECURITY_ENGINEER
       </p>
@@ -39,7 +39,7 @@
   </div>
 
   <!-- PDF Download Button & Profile Links -->
-  <div class="flex items-center space-x-3">
+  <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
     <!-- LinkedIn (icon only on small screens) -->
     <a
       href="https://www.linkedin.com/in/wesleykalataialberti"
@@ -84,7 +84,7 @@
     <a
       href={pdfUrl}
       download="Wesley_Alberti_CV.pdf"
-      class="group relative inline-flex items-center space-x-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-blue-500/10 border border-white/10 hover:border-blue-500/30 transition-all duration-300 shadow-glass text-xs font-semibold text-slate-200 hover:text-blue-300 overflow-hidden"
+      class="group relative inline-flex items-center space-x-1.5 px-3 sm:px-4 py-2 rounded-lg bg-white/5 hover:bg-blue-500/10 border border-white/10 hover:border-blue-500/30 transition-all duration-300 shadow-glass text-xs font-semibold text-slate-200 hover:text-blue-300 overflow-hidden"
       id="cv-download-btn"
       aria-label="Download CV as PDF"
     >
@@ -93,7 +93,7 @@
       ></span>
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        class="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform duration-300"
+        class="h-4 w-4 text-blue-400 group-hover:scale-110 transition-transform duration-300 shrink-0"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -105,8 +105,8 @@
           d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
         />
       </svg>
-      <span class="hidden md:inline tracking-wide">Download CV</span>
-      <span class="inline md:hidden tracking-wide">CV</span>
+      <span class="hidden sm:inline tracking-wide">Download CV</span>
+      <span class="inline sm:hidden tracking-wide text-[10px]">CV</span>
     </a>
   </div>
 </header>
