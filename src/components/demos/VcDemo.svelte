@@ -24,6 +24,7 @@
   // Camera / QR scanner state
   let cameraActive = false;
   let cameraError = null;
+  let cameraErrorType = null; // 'permission' | 'notfound' | 'https' | 'unknown'
   let videoEl = null;
   let canvasEl = null;
   let scanAnimFrame = null;
@@ -96,14 +97,16 @@
       const response = await issueVerifiableCredential(payload);
       issuedVc = response;
       
-      // Construct QR URL dynamically pointing to verify-vc route
-      const cleanShareUrl = response.shareUrl;
+      // Build the share URL pointing through the /api proxy so fetching it always
+      // reaches the backend, regardless of whether we're on the frontend dev server.
+      const cleanShareUrl = response.shareUrl; // e.g. /v1/identity/vc/share/{id}
       const apiOrigin = window.location.origin;
-      const verifyUrl = `${apiOrigin}/verify-vc?vcUrl=${encodeURIComponent(apiOrigin + cleanShareUrl)}`;
+      const apiShareUrl = `${apiOrigin}/api${cleanShareUrl}`; // http://localhost:5173/api/v1/identity/vc/share/{id}
+      const verifyUrl = `${apiOrigin}/verify-vc?vcUrl=${encodeURIComponent(apiShareUrl)}`;
       qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(verifyUrl)}`;
-      
-      // Auto-prefill verifier
-      inputVcUrl = apiOrigin + cleanShareUrl;
+
+      // Pre-fill verifier with the correctly-routed share URL
+      inputVcUrl = apiShareUrl;
       fetchedVcJson = JSON.stringify(response.credential, null, 2);
 
       // Trigger laser scanning animation before flipping the card
@@ -314,10 +317,46 @@
 
   async function startCamera() {
     cameraError = null;
+    cameraErrorType = null;
     cameraActive = true;
     errorMsg = null;
     verificationResult = null;
     connectionNotice = '';
+
+    // Check secure context first (getUserMedia requires HTTPS or localhost)
+    const isSecure = window.isSecureContext ||
+      location.protocol === 'https:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1' ||
+      location.hostname === '[::1]';
+
+    if (!isSecure) {
+      cameraError = 'Camera requires a secure connection (HTTPS). This page is loaded over HTTP.';
+      cameraErrorType = 'https';
+      cameraActive = false;
+      return;
+    }
+
+    // Check API availability
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraError = 'Camera API not available in this browser.';
+      cameraErrorType = 'unknown';
+      cameraActive = false;
+      return;
+    }
+
+    // Check Permissions API if available (avoids a confusing denied error later)
+    if (navigator.permissions) {
+      try {
+        const status = await navigator.permissions.query({ name: 'camera' });
+        if (status.state === 'denied') {
+          cameraError = 'Camera permission is blocked in your browser settings. Please reset it for this site.';
+          cameraErrorType = 'permission';
+          cameraActive = false;
+          return;
+        }
+      } catch (_) { /* permissions API may not support 'camera' on all browsers */ }
+    }
 
     // Small delay to let Svelte render the video/canvas elements
     await new Promise(r => setTimeout(r, 80));
@@ -333,8 +372,43 @@
       startScanLine();
       scheduleScan();
     } catch (err) {
-      cameraError = 'Camera access denied. Please allow camera access and try again.';
       cameraActive = false;
+      const name = err.name || '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        // Could still be a security/HTTPS rejection disguised as NotAllowed in some browsers
+        const isLikelyHttps = !window.isSecureContext;
+        if (isLikelyHttps) {
+          cameraError = 'Camera blocked: this page must be served over HTTPS for camera access to work.';
+          cameraErrorType = 'https';
+        } else {
+          cameraError = 'Camera permission denied. Tap the lock/camera icon in your browser address bar to allow access, then try again.';
+          cameraErrorType = 'permission';
+        }
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        cameraError = 'No camera found on this device.';
+        cameraErrorType = 'notfound';
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        cameraError = 'Camera is in use by another app. Close other apps using the camera and try again.';
+        cameraErrorType = 'unknown';
+      } else if (name === 'OverconstrainedError') {
+        // Retry without environment constraint
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          if (videoEl) { videoEl.srcObject = stream; videoEl.play(); }
+          cameraActive = true;
+          startScanLine();
+          scheduleScan();
+          return;
+        } catch (_) {}
+        cameraError = 'Could not access the rear camera. Please try again.';
+        cameraErrorType = 'unknown';
+      } else if (name === 'SecurityError') {
+        cameraError = 'Camera blocked by browser security policy. HTTPS is required.';
+        cameraErrorType = 'https';
+      } else {
+        cameraError = `Camera error: ${err.message || 'unknown error'}. Check browser permissions and try again.`;
+        cameraErrorType = 'unknown';
+      }
     }
   }
 
@@ -844,7 +918,68 @@
                 </div>
 
                 {#if cameraError}
-                  <div class="text-[10px] text-red-400 font-mono text-center px-4">{cameraError}</div>
+                  <div class="w-full max-w-xs mx-auto rounded-xl border px-4 py-3 space-y-2 text-left
+                    {cameraErrorType === 'https' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20'}">
+
+                    {#if cameraErrorType === 'https'}
+                      <!-- HTTPS error: explain clearly -->
+                      <div class="flex items-start space-x-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                        </svg>
+                        <div>
+                          <p class="text-[11px] font-bold text-amber-400">HTTPS Required</p>
+                          <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                            Browsers block camera access over plain HTTP. You're likely accessing via a local IP (e.g. <span class="font-mono text-slate-300">192.168.x.x</span>). To enable camera scanning:
+                          </p>
+                          <ul class="mt-1.5 space-y-1 text-[10px] text-slate-400 list-none">
+                            <li class="flex items-start space-x-1.5">
+                              <span class="text-amber-500 font-bold shrink-0">1.</span>
+                              <span>Use <span class="font-mono text-slate-300">localhost:5173</span> on the same device, or</span>
+                            </li>
+                            <li class="flex items-start space-x-1.5">
+                              <span class="text-amber-500 font-bold shrink-0">2.</span>
+                              <span>Run <span class="font-mono text-slate-300">npx cloudflare tunnel</span> for a free HTTPS URL to share with your phone</span>
+                            </li>
+                          </ul>
+                          <p class="text-[10px] text-slate-500 mt-1.5">In the meantime, use the sample VCs below to demo verification.</p>
+                        </div>
+                      </div>
+
+                    {:else if cameraErrorType === 'permission'}
+                      <!-- Permission denied: how to re-enable -->
+                      <div class="flex items-start space-x-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                        <div>
+                          <p class="text-[11px] font-bold text-red-400">Camera Permission Blocked</p>
+                          <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
+                            Your browser has camera access blocked for this site. To fix it:
+                          </p>
+                          <ul class="mt-1.5 space-y-1 text-[10px] text-slate-400">
+                            <li class="flex items-start space-x-1.5">
+                              <span class="text-red-400 font-bold shrink-0">→</span>
+                              <span>Tap the <strong class="text-slate-300">lock icon</strong> or <strong class="text-slate-300">🎥 camera icon</strong> in your address bar</span>
+                            </li>
+                            <li class="flex items-start space-x-1.5">
+                              <span class="text-red-400 font-bold shrink-0">→</span>
+                              <span>Set <strong class="text-slate-300">Camera</strong> to <strong class="text-slate-300">Allow</strong>, then reload and try again</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+
+                    {:else}
+                      <!-- Generic error -->
+                      <div class="flex items-center space-x-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <p class="text-[10px] text-red-400 font-mono">{cameraError}</p>
+                      </div>
+                    {/if}
+                  </div>
                 {/if}
 
                 <button

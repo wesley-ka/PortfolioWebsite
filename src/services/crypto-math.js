@@ -100,12 +100,36 @@ export function pointMultiply(pt, scalar) {
   return result;
 }
 
-// Web Crypto SHA-256 hash helper
+// Web Crypto SHA-256 hash helper — accepts a string (UTF-8 encoded) or a Uint8Array
 export async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
+  const msgBuffer = message instanceof Uint8Array
+    ? message
+    : new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Encodes an EC point in compressed SEC1 format: 0x02 or 0x03 prefix + 32-byte X coordinate.
+ * Matches what the server reconstructs for the commitment hash check.
+ */
+export function compressedPoint(pt) {
+  const xBytes = hexToBytes(toHex32(pt.x));
+  const prefix = (pt.y & 1n) === 0n ? 0x02 : 0x03; // even Y → 02, odd Y → 03
+  const out = new Uint8Array(33);
+  out[0] = prefix;
+  out.set(xBytes, 1);
+  return out;
+}
+
+// Helper: decode a 64-char hex string into a 32-byte Uint8Array
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
 }
 
 // Convert BigInt to fixed 64-character hexadecimal string
@@ -145,9 +169,9 @@ export async function generateSchnorrProof(birthYear, forceAdult = true) {
   const yxHex = toHex32(Y.x);
   const yyHex = toHex32(Y.y);
   
-  // 6. Commitment Hash = SHA-256 of the concatenated coordinates of R
-  // In our backend, we check how it recreates. It hashes the X and Y coordinates.
-  const commitmentHash = await sha256(rxHex + ryHex);
+  // 6. Commitment Hash = SHA-256 of the compressed SEC1 encoding of R.
+  // The server encodes R as: 0x02/0x03 (parity of Y) || 32-byte X, then hashes those 33 bytes.
+  const commitmentHash = await sha256(compressedPoint(R));
   
   // 7. Challenge 'c' (random scalar challenge)
   const challengeArray = new Uint8Array(32);

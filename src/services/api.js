@@ -930,7 +930,17 @@ export async function fetchCredentialFromUrl(vcUrl) {
 
   if (online) {
     try {
-      const response = await fetch(vcUrl);
+      // If the URL is a same-origin frontend URL like http://localhost:5173/v1/identity/vc/share/{id},
+      // rewrite it to go through the /api proxy so it reaches the backend.
+      let fetchUrl = vcUrl;
+      try {
+        const u = new URL(vcUrl);
+        if (u.origin === window.location.origin && u.pathname.startsWith('/v1/')) {
+          fetchUrl = `/api${u.pathname}`;
+        }
+      } catch (_) {}
+
+      const response = await fetch(fetchUrl);
       const latency = Date.now() - startTime;
       const json = await response.json();
 
@@ -939,7 +949,7 @@ export async function fetchCredentialFromUrl(vcUrl) {
           id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
           timestamp: new Date().toISOString(),
           method: 'GET',
-          path: vcUrl.replace(/^https?:\/\/[^\/]+/, ''),
+          path: fetchUrl.startsWith('/api') ? fetchUrl : fetchUrl.replace(/^https?:\/\/[^\/]+/, ''),
           online: true,
           status: response.status,
           latency,
