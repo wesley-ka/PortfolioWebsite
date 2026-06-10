@@ -4,4 +4,9 @@
 /vote/*     /voting  200
 /results/*  /voting  200
 
+# Greeting card routes (rewrite to root SPA)
+/connect    /        200
+/hi         /        200
+/hello      /        200
+
 
