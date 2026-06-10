@@ -8,7 +8,7 @@
  *
  * Usage:
  *   LinkedIn profile  → https://yoursite.com/ref/linkedin
- *   CV / résumé       → https://yoursite.com/ref/cv
+ *   Résumé / CV       → https://yoursite.com/ref/resume
  *   GitHub profile    → https://yoursite.com/ref/github
  *   Any other source  → https://yoursite.com/ref/<anything>
  *
@@ -21,7 +21,7 @@ export async function onRequest(context) {
   const destination = "/";
 
   // Allowed sources whitelist — rejects typos/abuse with a 404
-  const allowed = ["linkedin", "cv", "github", "twitter", "x", "email", "direct"];
+  const allowed = ["linkedin", "resume", "github", "twitter", "x", "email", "direct"];
   if (!allowed.includes(source.toLowerCase())) {
     return new Response("Not found", { status: 404 });
   }
