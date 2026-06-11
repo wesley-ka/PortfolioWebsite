@@ -10,7 +10,8 @@
     "pages:dev": "npm run build && wrangler pages dev dist",
     "deploy": "npm run build && wrangler pages deploy",
     "deploy:preview": "npm run build && wrangler pages deploy --branch=preview",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "echo \"No tests yet\" && exit 0",
+    "prebuild": "if [ ! -d node_modules ]; then npm install; fi"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
