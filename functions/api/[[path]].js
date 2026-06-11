@@ -5,21 +5,6 @@
 export async function onRequest(context) {
   const apiOrigin = context.env.API_ORIGIN?.replace(/\/$/, "");
 
-  // Temporarily disable the /connect endpoint
-  const requestUrl = new URL(context.request.url);
-  if (requestUrl.pathname === "/api/connect" || requestUrl.pathname === "/connect") {
-    return new Response(
-      JSON.stringify({
-        error: "SERVICE_UNAVAILABLE",
-        message: "The /connect endpoint is temporarily disabled for maintenance.",
-      }),
-      {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-
   if (!apiOrigin) {
     return Response.json(
       {
@@ -31,6 +16,7 @@ export async function onRequest(context) {
     );
   }
 
+  const requestUrl = new URL(context.request.url);
   const targetUrl = `${apiOrigin}${requestUrl.pathname}${requestUrl.search}`;
 
   const headers = new Headers(context.request.headers);
