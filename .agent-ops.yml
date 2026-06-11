@@ -1,0 +1,20 @@
+# .agent-ops.yml
+# Configuration for SRE orchestrator agent (Autoopsy)
+
+# NOTE: If executing from the repository root rather than the 'frontend/' directory,
+# all relative paths below must be prefixed with 'frontend/' (e.g. 'frontend/src/App.svelte').
+
+# Command to compile/build the project and verify syntax/compilation
+build_command: "npm run build"
+
+# Command to run unit/integration tests
+test_command: "npm run build"
+
+# Core files pre-loaded into Aider's context immediately on startup for primary context
+core_files:
+  - "src/App.svelte"
+  - "src/services/api.js"
+  - "functions/api/[[path]].js"
+  - "functions/connect.js"
+  - "src/voting/VotingApp.svelte"
+  - "vite.config.js"
