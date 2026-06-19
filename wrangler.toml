@@ -9,4 +9,4 @@ pages_build_output_dir = "./dist"
 # For local dev, copy .dev.vars.example to .dev.vars and set API_ORIGIN.
 
 [vars]
-API_ORIGIN = "https://api.awka.dev/api"
+API_ORIGIN = "https://api.awka.dev"
